@@ -71,7 +71,10 @@ impl Helper for ReplHelper {}
 
 fn main() {
     // Initialize logger (defaults to ERROR level, respects RUST_LOG env var)
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("error")).init();
+    // Filter out rustyline logs as they're not relevant to the compilation pipeline
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("error"))
+        .filter_module("rustyline", log::LevelFilter::Off)
+        .init();
 
     let mut eval = Evaluator::new();
 
