@@ -103,6 +103,8 @@ impl Evaluator {
 
     /// Evaluate a Lisp program (multiple forms)
     pub fn eval_program(&mut self, source: &str) -> Result<Vec<Value>> {
+        log::info!("Evaluating Lisp program");
+
         let forms = parse_program(source)?;
         let mut results = Vec::new();
 
@@ -111,6 +113,7 @@ impl Evaluator {
             results.push(result);
         }
 
+        log::info!("Evaluation complete");
         Ok(results)
     }
 
@@ -176,6 +179,10 @@ impl Evaluator {
             // Special forms for creating matrices/vectors
             FuncName::UserKernel(name) if name == "vector" => self.eval_create_vector(args),
             FuncName::UserKernel(name) if name == "matrix" => self.eval_create_matrix(args),
+
+            // Logging control
+            FuncName::UserKernel(name) if name == "set-log-level" => self.eval_set_log_level(args),
+            FuncName::UserKernel(name) if name == "get-log-level" => self.eval_get_log_level(args),
 
             // Other operations not yet implemented
             _ => Err(GraphBlasError::NotImplemented),
@@ -319,6 +326,60 @@ impl Evaluator {
 
         let matrix = Matrix::from_csr(nrows, ncols, row_ptrs, col_indices, values)?;
         Ok(Value::Matrix(matrix))
+    }
+
+    /// Set the log level: (set-log-level :debug)
+    fn eval_set_log_level(&mut self, args: &[Expr]) -> Result<Value> {
+        if args.len() != 1 {
+            return Err(GraphBlasError::InvalidValue);
+        }
+
+        // Get the log level from the argument
+        let level_str = match &args[0] {
+            Expr::Variable(name) if name.starts_with(':') => &name[1..],
+            Expr::Variable(name) => name.as_str(),
+            _ => return Err(GraphBlasError::InvalidValue),
+        };
+
+        // Parse and set the log level
+        let level = match level_str.to_lowercase().as_str() {
+            "error" => log::LevelFilter::Error,
+            "warn" => log::LevelFilter::Warn,
+            "info" => log::LevelFilter::Info,
+            "debug" => log::LevelFilter::Debug,
+            "trace" => log::LevelFilter::Trace,
+            "off" => log::LevelFilter::Off,
+            _ => return Err(GraphBlasError::InvalidValue),
+        };
+
+        log::set_max_level(level);
+        log::info!("Log level set to {:?}", level);
+
+        Ok(Value::Bool(true))
+    }
+
+    /// Get the current log level: (get-log-level)
+    fn eval_get_log_level(&mut self, args: &[Expr]) -> Result<Value> {
+        if !args.is_empty() {
+            return Err(GraphBlasError::InvalidValue);
+        }
+
+        let level = log::max_level();
+        let level_name = format!("{:?}", level).to_lowercase();
+
+        // Return as a number for now (could extend Value to support strings)
+        // ERROR=1, WARN=2, INFO=3, DEBUG=4, TRACE=5
+        let level_num = match level {
+            log::LevelFilter::Off => 0.0,
+            log::LevelFilter::Error => 1.0,
+            log::LevelFilter::Warn => 2.0,
+            log::LevelFilter::Info => 3.0,
+            log::LevelFilter::Debug => 4.0,
+            log::LevelFilter::Trace => 5.0,
+        };
+
+        log::info!("Current log level: {}", level_name);
+        Ok(Value::Number(level_num))
     }
 
     /// Get a reference to the environment

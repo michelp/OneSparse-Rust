@@ -70,6 +70,9 @@ impl Validator for ReplHelper {
 impl Helper for ReplHelper {}
 
 fn main() {
+    // Initialize logger (defaults to ERROR level, respects RUST_LOG env var)
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("error")).init();
+
     let mut eval = Evaluator::new();
 
     // Try to create an interactive editor with our custom helper
@@ -91,6 +94,9 @@ fn run_repl(eval: &mut Evaluator, rl: &mut Editor<ReplHelper, rustyline::history
     println!("Use Ctrl-R to search history, Up/Down arrows to navigate");
     println!("Press TAB for completion");
     println!("Multi-line input supported - incomplete S-expressions will continue on next line");
+    println!();
+    println!("Logging: (set-log-level :info|:debug|:trace) to see compilation pipeline");
+    println!("         (get-log-level) to see current log level");
     println!();
 
     // Try to load history from file

@@ -27,6 +27,9 @@ fn cons_to_vec(cons: &lexpr::Cons) -> Vec<Value> {
 
 /// Parse a Lisp program from a string
 pub fn parse_program(source: &str) -> Result<Vec<Form>> {
+    log::info!("Parsing Lisp program");
+    log::debug!("Source: {}", source);
+
     let mut forms = Vec::new();
 
     // Use Parser to handle multiple S-expressions
@@ -34,9 +37,11 @@ pub fn parse_program(source: &str) -> Result<Vec<Form>> {
 
     while let Some(value) = parser.next() {
         let value = value.map_err(|_| GraphBlasError::InvalidValue)?;
+        log::trace!("Parsing S-expression: {:?}", value);
         forms.push(parse_form(&value)?);
     }
 
+    log::debug!("Parsed {} form(s)", forms.len());
     Ok(forms)
 }
 
@@ -66,6 +71,8 @@ fn parse_form(value: &Value) -> Result<Form> {
 
 /// Parse a defkernel form: (defkernel name [params] body)
 fn parse_defkernel(cons: &lexpr::Cons) -> Result<Form> {
+    log::debug!("Parsing defkernel form");
+
     // Convert cons to list
     let list = cons_to_vec(cons);
 
@@ -80,8 +87,11 @@ fn parse_defkernel(cons: &lexpr::Cons) -> Result<Form> {
         .ok_or(GraphBlasError::InvalidValue)?
         .to_string();
 
+    log::debug!("Kernel name: {}", name);
+
     // list[2] is parameters
     let params = parse_params(&list[2])?;
+    log::debug!("Kernel params: {} parameter(s)", params.len());
 
     // list[3] is body
     let body = parse_expr(&list[3])?;

@@ -28,18 +28,31 @@ impl Compiler {
 
     /// Compile an expression to IR, returning the output node ID
     pub fn compile_expr(&mut self, expr: &Expr) -> Result<NodeId> {
-        match expr {
-            Expr::Literal(lit) => self.compile_literal(lit),
+        log::debug!("Compiling expression to IR");
+        log::trace!("Expression: {:?}", expr);
 
-            Expr::Variable(name) => self
-                .bindings
-                .get(name)
-                .copied()
-                .ok_or(GraphBlasError::InvalidValue),
+        let result = match expr {
+            Expr::Literal(lit) => {
+                log::trace!("Compiling literal");
+                self.compile_literal(lit)
+            }
 
-            Expr::FuncCall { func, args } => self.compile_func_call(func, args),
+            Expr::Variable(name) => {
+                log::trace!("Resolving variable: {}", name);
+                self
+                    .bindings
+                    .get(name)
+                    .copied()
+                    .ok_or(GraphBlasError::InvalidValue)
+            }
+
+            Expr::FuncCall { func, args } => {
+                log::debug!("Compiling function call: {:?}", func);
+                self.compile_func_call(func, args)
+            }
 
             Expr::Let { bindings, body } => {
+                log::debug!("Compiling let bindings");
                 // Compile bindings and add to environment
                 let mut new_bindings = Vec::new();
                 for (var, expr) in bindings {
@@ -55,7 +68,13 @@ impl Compiler {
                 // Compile body
                 self.compile_expr(body)
             }
+        };
+
+        if let Ok(node_id) = result {
+            log::trace!("Compiled to node ID: {}", node_id);
         }
+
+        result
     }
 
     /// Compile a literal value

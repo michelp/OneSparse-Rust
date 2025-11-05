@@ -57,6 +57,10 @@ impl LispCompleter {
             "to-csc".to_string(),
             "to-dense".to_string(),
 
+            // Logging
+            "set-log-level".to_string(),
+            "get-log-level".to_string(),
+
             // Utility
             "exit".to_string(),
         ];
