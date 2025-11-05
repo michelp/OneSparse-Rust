@@ -63,8 +63,8 @@ fn test_type_descriptors() {
 fn test_user_defined_type() {
     #[derive(Copy, Clone)]
     struct MyType {
-        x: f64,
-        y: f64,
+        _x: f64,
+        _y: f64,
     }
 
     let desc = TypeDescriptor::new_user_defined::<MyType>("MyType".to_string());
@@ -82,10 +82,10 @@ fn test_user_defined_type() {
 #[test]
 fn test_multiple_user_defined_types() {
     #[derive(Copy, Clone)]
-    struct Type1 { x: i32 }
+    struct Type1 { _x: i32 }
 
     #[derive(Copy, Clone)]
-    struct Type2 { y: f64 }
+    struct Type2 { _y: f64 }
 
     let desc1 = TypeDescriptor::new_user_defined::<Type1>("Type1".to_string());
     let desc2 = TypeDescriptor::new_user_defined::<Type2>("Type2".to_string());

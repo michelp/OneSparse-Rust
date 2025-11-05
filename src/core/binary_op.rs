@@ -18,8 +18,8 @@ impl<T: GraphBLASType, U: GraphBLASType, V: GraphBLASType> BinaryOp<T, U, V> {
     }
 
     /// Apply the operation
-    pub fn apply(&self, x: T, y: U) -> V {
-        (self.op)(x, y)
+    pub fn apply(&self, left_operand: T, right_operand: U) -> V {
+        (self.op)(left_operand, right_operand)
     }
 
     /// Get operator name

@@ -19,13 +19,13 @@ pub type GrB_Index = u64;
 /// Create a new matrix
 #[no_mangle]
 pub unsafe extern "C" fn GrB_Matrix_new(
-    A: *mut GrB_Matrix,
+    matrix_out: *mut GrB_Matrix,
     _type_: GrB_Type,
     _nrows: GrB_Index,
     _ncols: GrB_Index,
 ) -> GrB_Info {
     let result = catch_unwind(|| {
-        if A.is_null() {
+        if matrix_out.is_null() {
             return GrB_NULL_POINTER;
         }
 
@@ -39,15 +39,15 @@ pub unsafe extern "C" fn GrB_Matrix_new(
 
 /// Free a matrix
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Matrix_free(A: *mut GrB_Matrix) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Matrix_free(matrix: *mut GrB_Matrix) -> GrB_Info {
     let result = catch_unwind(|| {
-        if A.is_null() {
+        if matrix.is_null() {
             return GrB_NULL_POINTER;
         }
 
         // TODO: Free matrix
         // For now, just set to null
-        *A = std::ptr::null_mut();
+        *matrix = std::ptr::null_mut();
         GrB_SUCCESS
     });
 
@@ -58,10 +58,10 @@ pub unsafe extern "C" fn GrB_Matrix_free(A: *mut GrB_Matrix) -> GrB_Info {
 #[no_mangle]
 pub unsafe extern "C" fn GrB_Matrix_nrows(
     nrows: *mut GrB_Index,
-    A: GrB_Matrix,
+    matrix: GrB_Matrix,
 ) -> GrB_Info {
     let result = catch_unwind(|| {
-        if nrows.is_null() || A.is_null() {
+        if nrows.is_null() || matrix.is_null() {
             return GrB_NULL_POINTER;
         }
 
@@ -76,10 +76,10 @@ pub unsafe extern "C" fn GrB_Matrix_nrows(
 #[no_mangle]
 pub unsafe extern "C" fn GrB_Matrix_ncols(
     ncols: *mut GrB_Index,
-    A: GrB_Matrix,
+    matrix: GrB_Matrix,
 ) -> GrB_Info {
     let result = catch_unwind(|| {
-        if ncols.is_null() || A.is_null() {
+        if ncols.is_null() || matrix.is_null() {
             return GrB_NULL_POINTER;
         }
 
@@ -94,10 +94,10 @@ pub unsafe extern "C" fn GrB_Matrix_ncols(
 #[no_mangle]
 pub unsafe extern "C" fn GrB_Matrix_nvals(
     nvals: *mut GrB_Index,
-    A: GrB_Matrix,
+    matrix: GrB_Matrix,
 ) -> GrB_Info {
     let result = catch_unwind(|| {
-        if nvals.is_null() || A.is_null() {
+        if nvals.is_null() || matrix.is_null() {
             return GrB_NULL_POINTER;
         }
 

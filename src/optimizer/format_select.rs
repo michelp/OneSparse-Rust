@@ -158,6 +158,7 @@ impl FormatSelectionPass {
     }
 
     /// Count how many conversion nodes would be needed
+    #[allow(dead_code)]
     fn count_conversions(&self, graph: &IRGraph, formats: &HashMap<NodeId, StorageFormat>) -> usize {
         let mut count = 0;
 

@@ -24,8 +24,8 @@ impl<T: GraphBLASType> Monoid<T> {
     }
 
     /// Apply the monoid operation
-    pub fn apply(&self, a: T, b: T) -> T {
-        (self.op)(a, b)
+    pub fn apply(&self, left: T, right: T) -> T {
+        (self.op)(left, right)
     }
 
     /// Get identity element

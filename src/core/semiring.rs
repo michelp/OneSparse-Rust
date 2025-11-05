@@ -37,13 +37,13 @@ impl<T: GraphBLASType> Semiring<T> {
     }
 
     /// Apply addition operation
-    pub fn add(&self, a: T, b: T) -> T {
-        (self.add_op)(a, b)
+    pub fn add(&self, left: T, right: T) -> T {
+        (self.add_op)(left, right)
     }
 
     /// Apply multiplication operation
-    pub fn multiply(&self, a: T, b: T) -> T {
-        (self.mul_op)(a, b)
+    pub fn multiply(&self, left: T, right: T) -> T {
+        (self.mul_op)(left, right)
     }
 
     /// Get zero element

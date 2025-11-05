@@ -21,8 +21,8 @@ impl<T: GraphBLASType, U: GraphBLASType, Thunk: Copy> IndexUnaryOp<T, U, Thunk> 
     }
 
     /// Apply the operation
-    pub fn apply(&self, x: T, i: u64, j: u64, thunk: Thunk) -> U {
-        (self.op)(x, i, j, thunk)
+    pub fn apply(&self, operand: T, row_idx: u64, col_idx: u64, thunk: Thunk) -> U {
+        (self.op)(operand, row_idx, col_idx, thunk)
     }
 
     /// Get operator name

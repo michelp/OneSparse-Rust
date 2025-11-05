@@ -125,6 +125,7 @@ impl CompiledFunction {
     }
 
     /// Execute with graph reference (for debugging/interpretation)
+    #[allow(dead_code)]
     pub(crate) fn with_graph(graph: IRGraph) -> Self {
         Self {
             kernel_ptr: None,

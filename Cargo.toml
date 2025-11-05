@@ -25,4 +25,14 @@ target-lexicon = "0.12"
 # Hashing for cache keys
 sha2 = "0.10"
 
+# S-expression parsing for Lisp DSL
+lexpr = "0.2"
+
+# TTY detection for REPL
+atty = "0.2"
+
+[[bin]]
+name = "lisp"
+path = "src/bin/lisp_repl.rs"
+
 [dev-dependencies]

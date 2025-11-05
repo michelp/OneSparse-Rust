@@ -17,18 +17,18 @@ use std::collections::{HashMap, HashSet};
 /// Fusion optimization pass
 pub struct FusionPass {
     /// Maximum fusion depth (prevent excessive merging)
-    max_depth: usize,
+    _max_depth: usize,
 }
 
 impl FusionPass {
     /// Create a new fusion pass
     pub fn new() -> Self {
-        Self { max_depth: 3 }
+        Self { _max_depth: 3 }
     }
 
     /// Create a fusion pass with custom max depth
     pub fn with_max_depth(max_depth: usize) -> Self {
-        Self { max_depth }
+        Self { _max_depth: max_depth }
     }
 
     /// Check if two operations can be fused
@@ -194,7 +194,7 @@ mod tests {
     fn test_fusion_pass_creation() {
         let pass = FusionPass::new();
         assert_eq!(pass.name(), "fusion");
-        assert_eq!(pass.max_depth, 3);
+        assert_eq!(pass._max_depth, 3);
     }
 
     #[test]

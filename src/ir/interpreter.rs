@@ -6,7 +6,6 @@
 use crate::core::error::{GraphBlasError, Result};
 use crate::ir::graph::IRGraph;
 use crate::ir::node::{BinaryOpKind, NodeId, Operation, ScalarValue, UnaryOpKind};
-use crate::ir::types::ScalarType;
 use std::collections::HashMap;
 
 /// Value that can be stored in the interpreter

@@ -18,8 +18,8 @@ impl<T: GraphBLASType, U: GraphBLASType> UnaryOp<T, U> {
     }
 
     /// Apply the operation
-    pub fn apply(&self, x: T) -> U {
-        (self.op)(x)
+    pub fn apply(&self, operand: T) -> U {
+        (self.op)(operand)
     }
 
     /// Get operator name

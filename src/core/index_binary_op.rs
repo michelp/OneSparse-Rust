@@ -23,8 +23,8 @@ impl<T: GraphBLASType, U: GraphBLASType, V: GraphBLASType, Thunk: Copy>
     }
 
     /// Apply the operation
-    pub fn apply(&self, x: T, y: U, i: u64, j: u64, thunk: Thunk) -> V {
-        (self.op)(x, y, i, j, thunk)
+    pub fn apply(&self, left_operand: T, right_operand: U, row_idx: u64, col_idx: u64, thunk: Thunk) -> V {
+        (self.op)(left_operand, right_operand, row_idx, col_idx, thunk)
     }
 
     /// Get operator name

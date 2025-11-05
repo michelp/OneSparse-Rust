@@ -17,12 +17,12 @@ pub type GrB_Vector = *mut GrB_Vector_opaque;
 /// Create a new vector
 #[no_mangle]
 pub unsafe extern "C" fn GrB_Vector_new(
-    v: *mut GrB_Vector,
+    vector_out: *mut GrB_Vector,
     _type_: GrB_Type,
     _size: GrB_Index,
 ) -> GrB_Info {
     let result = catch_unwind(|| {
-        if v.is_null() {
+        if vector_out.is_null() {
             return GrB_NULL_POINTER;
         }
         GrB_NOT_IMPLEMENTED
@@ -33,12 +33,12 @@ pub unsafe extern "C" fn GrB_Vector_new(
 
 /// Free a vector
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Vector_free(v: *mut GrB_Vector) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Vector_free(vector: *mut GrB_Vector) -> GrB_Info {
     let result = catch_unwind(|| {
-        if v.is_null() {
+        if vector.is_null() {
             return GrB_NULL_POINTER;
         }
-        *v = std::ptr::null_mut();
+        *vector = std::ptr::null_mut();
         GrB_SUCCESS
     });
 
@@ -49,10 +49,10 @@ pub unsafe extern "C" fn GrB_Vector_free(v: *mut GrB_Vector) -> GrB_Info {
 #[no_mangle]
 pub unsafe extern "C" fn GrB_Vector_size(
     size: *mut GrB_Index,
-    v: GrB_Vector,
+    vector: GrB_Vector,
 ) -> GrB_Info {
     let result = catch_unwind(|| {
-        if size.is_null() || v.is_null() {
+        if size.is_null() || vector.is_null() {
             return GrB_NULL_POINTER;
         }
         GrB_NOT_IMPLEMENTED
@@ -65,10 +65,10 @@ pub unsafe extern "C" fn GrB_Vector_size(
 #[no_mangle]
 pub unsafe extern "C" fn GrB_Vector_nvals(
     nvals: *mut GrB_Index,
-    v: GrB_Vector,
+    vector: GrB_Vector,
 ) -> GrB_Info {
     let result = catch_unwind(|| {
-        if nvals.is_null() || v.is_null() {
+        if nvals.is_null() || vector.is_null() {
             return GrB_NULL_POINTER;
         }
         GrB_NOT_IMPLEMENTED

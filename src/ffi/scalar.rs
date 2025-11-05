@@ -16,11 +16,11 @@ pub type GrB_Scalar = *mut GrB_Scalar_opaque;
 /// Create a new scalar
 #[no_mangle]
 pub unsafe extern "C" fn GrB_Scalar_new(
-    s: *mut GrB_Scalar,
+    scalar_out: *mut GrB_Scalar,
     _type_: GrB_Type,
 ) -> GrB_Info {
     let result = catch_unwind(|| {
-        if s.is_null() {
+        if scalar_out.is_null() {
             return GrB_NULL_POINTER;
         }
         GrB_NOT_IMPLEMENTED
@@ -31,12 +31,12 @@ pub unsafe extern "C" fn GrB_Scalar_new(
 
 /// Free a scalar
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Scalar_free(s: *mut GrB_Scalar) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Scalar_free(scalar: *mut GrB_Scalar) -> GrB_Info {
     let result = catch_unwind(|| {
-        if s.is_null() {
+        if scalar.is_null() {
             return GrB_NULL_POINTER;
         }
-        *s = std::ptr::null_mut();
+        *scalar = std::ptr::null_mut();
         GrB_SUCCESS
     });
 

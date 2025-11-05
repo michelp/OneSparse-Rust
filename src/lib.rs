@@ -12,7 +12,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
 
-#[macro_use]
 extern crate lazy_static;
 
 // Public modules
@@ -25,6 +24,9 @@ pub mod ir;
 pub mod compiler;
 pub mod optimizer;
 pub mod ops;
+
+// Lisp DSL for defining kernels
+pub mod lisp;
 
 // Re-export commonly used items for convenience
 pub use types::{GraphBLASType, TypeCode, TypeDescriptor};

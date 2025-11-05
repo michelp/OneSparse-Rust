@@ -35,53 +35,53 @@ lazy_static::lazy_static! {
 /// Matrix-matrix multiplication: C = A * B
 ///
 /// # Arguments
-/// * `c` - Output matrix (will be modified)
+/// * `output` - Output matrix (will be modified)
 /// * `mask` - Optional mask matrix
-/// * `a` - First input matrix
-/// * `b` - Second input matrix
+/// * `left_matrix` - First input matrix
+/// * `right_matrix` - Second input matrix
 /// * `semiring` - Semiring for multiplication
 /// * `desc` - Optional descriptor
 pub fn mxm<T: GraphBLASType>(
-    c: &mut Matrix<T>,
+    output: &mut Matrix<T>,
     mask: Option<&Matrix<bool>>,
-    a: &Matrix<T>,
-    b: &Matrix<T>,
-    semiring: &Semiring<T>,
+    left_matrix: &Matrix<T>,
+    right_matrix: &Matrix<T>,
+    _semiring: &Semiring<T>,
     desc: Option<&Descriptor>,
 ) -> Result<()> {
     // Get effective dimensions (considering transpose)
-    let (a_rows, a_cols) = if let Some(d) = desc {
-        if d.transpose_first {
-            (a.ncols(), a.nrows())
+    let (left_rows, left_cols) = if let Some(descriptor) = desc {
+        if descriptor.transpose_first {
+            (left_matrix.ncols(), left_matrix.nrows())
         } else {
-            (a.nrows(), a.ncols())
+            (left_matrix.nrows(), left_matrix.ncols())
         }
     } else {
-        (a.nrows(), a.ncols())
+        (left_matrix.nrows(), left_matrix.ncols())
     };
 
-    let (b_rows, b_cols) = if let Some(d) = desc {
-        if d.transpose_second {
-            (b.ncols(), b.nrows())
+    let (right_rows, right_cols) = if let Some(descriptor) = desc {
+        if descriptor.transpose_second {
+            (right_matrix.ncols(), right_matrix.nrows())
         } else {
-            (b.nrows(), b.ncols())
+            (right_matrix.nrows(), right_matrix.ncols())
         }
     } else {
-        (b.nrows(), b.ncols())
+        (right_matrix.nrows(), right_matrix.ncols())
     };
 
     // Validate dimensions
-    if a_cols != b_rows {
+    if left_cols != right_rows {
         return Err(GraphBlasError::DimensionMismatch);
     }
 
-    if c.nrows() != a_rows || c.ncols() != b_cols {
+    if output.nrows() != left_rows || output.ncols() != right_cols {
         return Err(GraphBlasError::DimensionMismatch);
     }
 
     // Check if mask dimensions match if present
-    if let Some(m) = mask {
-        if m.nrows() != c.nrows() || m.ncols() != c.ncols() {
+    if let Some(mask_matrix) = mask {
+        if mask_matrix.nrows() != output.nrows() || mask_matrix.ncols() != output.ncols() {
             return Err(GraphBlasError::DimensionMismatch);
         }
     }
@@ -94,29 +94,29 @@ pub fn mxm<T: GraphBLASType>(
         .ok_or(GraphBlasError::InvalidValue)?;
 
     // Add inputs
-    let a_shape = Shape::matrix(a.nrows(), a.ncols());
-    let b_shape = Shape::matrix(b.nrows(), b.ncols());
+    let left_shape = Shape::matrix(left_matrix.nrows(), left_matrix.ncols());
+    let right_shape = Shape::matrix(right_matrix.nrows(), right_matrix.ncols());
 
-    let a_node = builder.input_matrix("A", scalar_type, a_shape)?;
-    let b_node = builder.input_matrix("B", scalar_type, b_shape)?;
+    let left_node = builder.input_matrix("A", scalar_type, left_shape)?;
+    let right_node = builder.input_matrix("B", scalar_type, right_shape)?;
 
     // Apply transpose if requested
-    let (a_node, b_node) = if let Some(d) = desc {
-        let a_final = if d.transpose_first {
-            builder.transpose(a_node)?
+    let (left_node, right_node) = if let Some(descriptor) = desc {
+        let left_final = if descriptor.transpose_first {
+            builder.transpose(left_node)?
         } else {
-            a_node
+            left_node
         };
 
-        let b_final = if d.transpose_second {
-            builder.transpose(b_node)?
+        let right_final = if descriptor.transpose_second {
+            builder.transpose(right_node)?
         } else {
-            b_node
+            right_node
         };
 
-        (a_final, b_final)
+        (left_final, right_final)
     } else {
-        (a_node, b_node)
+        (left_node, right_node)
     };
 
     // Convert semiring to SemiringOp
@@ -129,7 +129,7 @@ pub fn mxm<T: GraphBLASType>(
     };
 
     // Create matmul operation
-    let result = builder.matmul(a_node, b_node, semiring_op)?;
+    let result = builder.matmul(left_node, right_node, semiring_op)?;
 
     // Mark as output
     builder.output(result)?;
@@ -162,18 +162,18 @@ pub fn mxm<T: GraphBLASType>(
 
     // Execute the compiled kernel
     // Extract sparse data from input matrices
-    let a_storage = a.storage();
-    let b_storage = b.storage();
-    let c_storage = c.storage_mut();
+    let left_storage = left_matrix.storage();
+    let right_storage = right_matrix.storage();
+    let output_storage = output.storage_mut();
 
     // Prepare input/output pointers for kernel execution
     // In a full implementation, these would point to the actual sparse arrays
     let inputs: Vec<*const ()> = vec![
-        a_storage as *const _ as *const (),
-        b_storage as *const _ as *const (),
+        left_storage as *const _ as *const (),
+        right_storage as *const _ as *const (),
     ];
     let outputs: Vec<*mut ()> = vec![
-        c_storage as *mut _ as *mut (),
+        output_storage as *mut _ as *mut (),
     ];
 
     // Call the compiled kernel
@@ -190,32 +190,32 @@ pub fn mxm<T: GraphBLASType>(
 /// Matrix-vector multiplication: w = A * u
 ///
 /// # Arguments
-/// * `w` - Output vector (will be modified)
+/// * `output` - Output vector (will be modified)
 /// * `mask` - Optional mask vector
-/// * `a` - Input matrix
-/// * `u` - Input vector
+/// * `matrix` - Input matrix
+/// * `input_vector` - Input vector
 /// * `semiring` - Semiring for multiplication
 /// * `desc` - Optional descriptor
 pub fn mxv<T: GraphBLASType>(
-    w: &mut Vector<T>,
+    output: &mut Vector<T>,
     mask: Option<&Vector<bool>>,
-    a: &Matrix<T>,
-    u: &Vector<T>,
+    matrix: &Matrix<T>,
+    input_vector: &Vector<T>,
     semiring: &Semiring<T>,
     desc: Option<&Descriptor>,
 ) -> Result<()> {
     // Validate dimensions
-    if a.ncols() != u.size() {
+    if matrix.ncols() != input_vector.size() {
         return Err(GraphBlasError::DimensionMismatch);
     }
 
-    if w.size() != a.nrows() {
+    if output.size() != matrix.nrows() {
         return Err(GraphBlasError::DimensionMismatch);
     }
 
     // Check mask dimensions
-    if let Some(m) = mask {
-        if m.size() != w.size() {
+    if let Some(mask_vector) = mask {
+        if mask_vector.size() != output.size() {
             return Err(GraphBlasError::DimensionMismatch);
         }
     }
@@ -225,21 +225,21 @@ pub fn mxv<T: GraphBLASType>(
     let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
         .ok_or(GraphBlasError::InvalidValue)?;
 
-    let a_shape = Shape::matrix(a.nrows(), a.ncols());
-    let u_shape = Shape::vector(u.size());
+    let matrix_shape = Shape::matrix(matrix.nrows(), matrix.ncols());
+    let vector_shape = Shape::vector(input_vector.size());
 
-    let a_node = builder.input_matrix("A", scalar_type, a_shape)?;
-    let u_node = builder.input_vector("u", scalar_type, u_shape)?;
+    let matrix_node = builder.input_matrix("A", scalar_type, matrix_shape)?;
+    let vector_node = builder.input_vector("u", scalar_type, vector_shape)?;
 
     // Apply transpose if requested
-    let a_node = if let Some(d) = desc {
-        if d.transpose_first {
-            builder.transpose(a_node)?
+    let matrix_node = if let Some(descriptor) = desc {
+        if descriptor.transpose_first {
+            builder.transpose(matrix_node)?
         } else {
-            a_node
+            matrix_node
         }
     } else {
-        a_node
+        matrix_node
     };
 
     // Convert semiring from core layer to IR layer
@@ -255,7 +255,7 @@ pub fn mxv<T: GraphBLASType>(
         }
     };
 
-    let result = builder.matvec(a_node, u_node, semiring_op)?;
+    let result = builder.matvec(matrix_node, vector_node, semiring_op)?;
     builder.output(result)?;
 
     let mut graph = builder.build();
@@ -279,54 +279,54 @@ pub fn mxv<T: GraphBLASType>(
 
     // Execute the compiled kernel
     // Extract sparse data from inputs
-    let a_storage = a.storage();
+    let matrix_storage = matrix.storage();
 
     // Prepare input/output pointers for kernel execution
     let inputs: Vec<*const ()> = vec![
-        a_storage as *const _ as *const (),
-        u.indices().as_ptr() as *const (),
-        u.values().as_ptr() as *const (),
+        matrix_storage as *const _ as *const (),
+        input_vector.indices().as_ptr() as *const (),
+        input_vector.values().as_ptr() as *const (),
     ];
     let outputs: Vec<*mut ()> = vec![
-        w as *mut Vector<T> as *mut (),  // Pass the whole vector for now
+        output as *mut Vector<T> as *mut (),  // Pass the whole vector for now
     ];
 
     // Call the compiled kernel
-    // TODO: Real execution would compute w = A * u using compiled native code
+    // TODO: Real execution would compute output = matrix * input_vector using compiled native code
     function.execute(&inputs, &outputs)?;
 
     Ok(())
 }
 
-/// Vector-matrix multiplication: w = u * A
+/// Vector-matrix multiplication: output = input_vector * matrix
 ///
 /// # Arguments
-/// * `w` - Output vector (will be modified)
+/// * `output` - Output vector (will be modified)
 /// * `mask` - Optional mask vector
-/// * `u` - Input vector
-/// * `a` - Input matrix
+/// * `input_vector` - Input vector
+/// * `matrix` - Input matrix
 /// * `semiring` - Semiring for multiplication
 /// * `desc` - Optional descriptor
 pub fn vxm<T: GraphBLASType>(
-    w: &mut Vector<T>,
+    output: &mut Vector<T>,
     mask: Option<&Vector<bool>>,
-    u: &Vector<T>,
-    a: &Matrix<T>,
+    input_vector: &Vector<T>,
+    matrix: &Matrix<T>,
     semiring: &Semiring<T>,
     desc: Option<&Descriptor>,
 ) -> Result<()> {
     // Validate dimensions
-    if u.size() != a.nrows() {
+    if input_vector.size() != matrix.nrows() {
         return Err(GraphBlasError::DimensionMismatch);
     }
 
-    if w.size() != a.ncols() {
+    if output.size() != matrix.ncols() {
         return Err(GraphBlasError::DimensionMismatch);
     }
 
     // Check mask dimensions
-    if let Some(m) = mask {
-        if m.size() != w.size() {
+    if let Some(mask_vector) = mask {
+        if mask_vector.size() != output.size() {
             return Err(GraphBlasError::DimensionMismatch);
         }
     }
@@ -336,21 +336,21 @@ pub fn vxm<T: GraphBLASType>(
     let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
         .ok_or(GraphBlasError::InvalidValue)?;
 
-    let u_shape = Shape::vector(u.size());
-    let a_shape = Shape::matrix(a.nrows(), a.ncols());
+    let vector_shape = Shape::vector(input_vector.size());
+    let matrix_shape = Shape::matrix(matrix.nrows(), matrix.ncols());
 
-    let u_node = builder.input_vector("u", scalar_type, u_shape)?;
-    let a_node = builder.input_matrix("A", scalar_type, a_shape)?;
+    let vector_node = builder.input_vector("u", scalar_type, vector_shape)?;
+    let matrix_node = builder.input_matrix("A", scalar_type, matrix_shape)?;
 
     // Apply transpose if requested
-    let a_node = if let Some(d) = desc {
-        if d.transpose_second {
-            builder.transpose(a_node)?
+    let matrix_node = if let Some(descriptor) = desc {
+        if descriptor.transpose_second {
+            builder.transpose(matrix_node)?
         } else {
-            a_node
+            matrix_node
         }
     } else {
-        a_node
+        matrix_node
     };
 
     // Convert semiring from core layer to IR layer
@@ -366,7 +366,7 @@ pub fn vxm<T: GraphBLASType>(
         }
     };
 
-    let result = builder.vecmat(u_node, a_node, semiring_op)?;
+    let result = builder.vecmat(vector_node, matrix_node, semiring_op)?;
     builder.output(result)?;
 
     let mut graph = builder.build();
@@ -390,20 +390,20 @@ pub fn vxm<T: GraphBLASType>(
 
     // Execute the compiled kernel
     // Extract sparse data from inputs
-    let a_storage = a.storage();
+    let matrix_storage = matrix.storage();
 
     // Prepare input/output pointers for kernel execution
     let inputs: Vec<*const ()> = vec![
-        u.indices().as_ptr() as *const (),
-        u.values().as_ptr() as *const (),
-        a_storage as *const _ as *const (),
+        input_vector.indices().as_ptr() as *const (),
+        input_vector.values().as_ptr() as *const (),
+        matrix_storage as *const _ as *const (),
     ];
     let outputs: Vec<*mut ()> = vec![
-        w as *mut Vector<T> as *mut (),  // Pass the whole vector for now
+        output as *mut Vector<T> as *mut (),  // Pass the whole vector for now
     ];
 
     // Call the compiled kernel
-    // TODO: Real execution would compute w = u * A using compiled native code
+    // TODO: Real execution would compute output = input_vector * matrix using compiled native code
     function.execute(&inputs, &outputs)?;
 
     Ok(())

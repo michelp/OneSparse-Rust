@@ -218,6 +218,7 @@ impl CraneliftBackend {
         Ok(CompiledFunction::with_kernel(code_ptr))
     }
 
+    #[allow(dead_code)]
     fn generate_node(
         &self,
         _builder: &mut FunctionBuilder,
@@ -299,6 +300,7 @@ impl CraneliftBackend {
         }
     }
 
+    #[allow(dead_code)]
     fn scalar_type_to_cranelift_type(&self, scalar_type: ScalarType) -> Type {
         match scalar_type {
             ScalarType::Bool => types::I8,
@@ -411,7 +413,7 @@ impl Default for CraneliftBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{GraphBuilder, Shape, semirings};
+    use crate::ir::{GraphBuilder, Shape};
 
     #[test]
     fn test_backend_creation() {

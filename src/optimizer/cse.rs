@@ -16,18 +16,18 @@ use std::collections::HashMap;
 /// Common subexpression elimination pass
 pub struct CSEPass {
     /// Whether to be aggressive (eliminate more) or conservative
-    aggressive: bool,
+    _aggressive: bool,
 }
 
 impl CSEPass {
     /// Create a new CSE pass
     pub fn new() -> Self {
-        Self { aggressive: false }
+        Self { _aggressive: false }
     }
 
     /// Create an aggressive CSE pass
     pub fn aggressive() -> Self {
-        Self { aggressive: true }
+        Self { _aggressive: true }
     }
 
     /// Check if two operations are semantically equivalent
@@ -184,6 +184,7 @@ impl CSEPass {
     }
 
     /// Count how many nodes would be eliminated
+    #[allow(dead_code)]
     fn count_redundant(&self, graph: &IRGraph) -> usize {
         let canonical_map = self.find_equivalence_classes(graph);
         canonical_map.len()
@@ -243,7 +244,7 @@ mod tests {
     fn test_cse_pass_creation() {
         let pass = CSEPass::new();
         assert_eq!(pass.name(), "cse");
-        assert!(!pass.aggressive);
+        assert!(!pass._aggressive);
     }
 
     #[test]
