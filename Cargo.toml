@@ -28,8 +28,9 @@ sha2 = "0.10"
 # S-expression parsing for Lisp DSL
 lexpr = "0.2"
 
-# TTY detection for REPL
-atty = "0.2"
+# Line editing and REPL features
+rustyline = "17.0.2"
+dirs = "5.0"
 
 [[bin]]
 name = "lisp"

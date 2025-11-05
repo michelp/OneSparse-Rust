@@ -15,6 +15,9 @@ pub mod types;
 pub mod compiler;
 pub mod kernel;
 pub mod eval;
+pub mod completer;
+pub mod validator;
+pub mod highlighter;
 
 pub use ast::*;
 pub use parser::*;
@@ -22,3 +25,6 @@ pub use types::*;
 pub use compiler::*;
 pub use kernel::*;
 pub use eval::*;
+pub use completer::*;
+pub use validator::*;
+pub use highlighter::*;
