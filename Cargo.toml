@@ -1,0 +1,28 @@
+[package]
+name = "rustsparse"
+version = "0.1.0"
+edition = "2021"
+authors = ["Michel Pelletier"]
+description = "Rust implementation of GraphBLAS API with C-compatible interface"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/michelp/rustsparse"
+
+[lib]
+name = "rustsparse"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lazy_static = "1.4"
+libc = "0.2"
+
+# JIT compilation with Cranelift
+cranelift = "0.109"
+cranelift-jit = "0.109"
+cranelift-module = "0.109"
+cranelift-codegen = "0.109"
+target-lexicon = "0.12"
+
+# Hashing for cache keys
+sha2 = "0.10"
+
+[dev-dependencies]
