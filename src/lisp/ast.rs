@@ -58,16 +58,51 @@ pub enum Expr {
     Variable(String),
 
     /// Function call: (op arg1 arg2 ...)
-    FuncCall {
-        func: FuncName,
-        args: Vec<Expr>,
-    },
+    FuncCall { func: FuncName, args: Vec<Expr> },
 
     /// Let binding: (let ((x expr)) body)
     Let {
         bindings: Vec<(String, Expr)>,
         body: Box<Expr>,
     },
+
+    /// Conditional: (if condition then-expr else-expr)
+    If {
+        condition: Box<Expr>,
+        then_branch: Box<Expr>,
+        else_branch: Box<Expr>,
+    },
+
+    /// While loop: (while condition body...)
+    While {
+        condition: Box<Expr>,
+        body: Box<Expr>,
+    },
+
+    /// For loop: (for var start end body...) or (for var start end step body...)
+    For {
+        var: String,
+        start: Box<Expr>,
+        end: Box<Expr>,
+        step: Option<Box<Expr>>,
+        body: Box<Expr>,
+    },
+
+    /// Cond (multi-way branching): (cond (test1 result1) (test2 result2) ... (else default))
+    Cond {
+        clauses: Vec<(Expr, Expr)>,
+        else_clause: Option<Box<Expr>>,
+    },
+
+    /// Block/sequence of expressions: (begin expr1 expr2 ...)
+    /// Returns the value of the last expression
+    Block(Vec<Expr>),
+
+    /// Break from loop: (break) or (break value)
+    Break(Option<Box<Expr>>),
+
+    /// Continue to next iteration: (continue)
+    Continue,
 }
 
 /// Function names in the DSL

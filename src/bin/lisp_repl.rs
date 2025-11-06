@@ -72,8 +72,10 @@ impl Helper for ReplHelper {}
 fn main() {
     // Initialize logger (defaults to ERROR level, respects RUST_LOG env var)
     // Filter out rustyline logs as they're not relevant to the compilation pipeline
+    // Suppress timestamps for cleaner REPL output
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("error"))
         .filter_module("rustyline", log::LevelFilter::Off)
+        .format_timestamp(None)
         .init();
 
     let mut eval = Evaluator::new();
@@ -97,6 +99,14 @@ fn run_repl(eval: &mut Evaluator, rl: &mut Editor<ReplHelper, rustyline::history
     println!("Use Ctrl-R to search history, Up/Down arrows to navigate");
     println!("Press TAB for completion");
     println!("Multi-line input supported - incomplete S-expressions will continue on next line");
+    println!();
+    println!(
+        "Control structures: (if cond then else) (while cond body...) (for var start end body...)"
+    );
+    println!(
+        "                    (cond (test1 result1) ... (else default)) (begin expr1 expr2 ...)"
+    );
+    println!("                    (break) (continue)");
     println!();
     println!("Logging: (set-log-level :info|:debug|:trace) to see compilation pipeline");
     println!("         (get-log-level) to see current log level");

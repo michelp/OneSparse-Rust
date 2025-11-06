@@ -73,17 +73,20 @@ impl Interpreter {
         for &node_id in &topo_order {
             if let Some(node) = graph.get_node(node_id) {
                 let result = match &node.op {
-                    Operation::Input { name, .. } => {
-                        self.inputs.get(name).cloned()
-                            .ok_or(GraphBlasError::InvalidValue)?
-                    }
+                    Operation::Input { name, .. } => self
+                        .inputs
+                        .get(name)
+                        .cloned()
+                        .ok_or(GraphBlasError::InvalidValue)?,
 
                     Operation::Output => {
                         // Output nodes just pass through their input
                         if node.inputs.is_empty() {
                             return Err(GraphBlasError::InvalidValue);
                         }
-                        self.values.get(&node.inputs[0]).cloned()
+                        self.values
+                            .get(&node.inputs[0])
+                            .cloned()
                             .ok_or(GraphBlasError::InvalidValue)?
                     }
 
@@ -107,9 +110,7 @@ impl Interpreter {
                         self.execute_ewise_mult(&node.inputs, binary_op)?
                     }
 
-                    Operation::Apply { unary_op } => {
-                        self.execute_apply(&node.inputs, unary_op)?
-                    }
+                    Operation::Apply { unary_op } => self.execute_apply(&node.inputs, unary_op)?,
 
                     Operation::ApplyBinaryLeft { binary_op, scalar } => {
                         self.execute_apply_binary_left(&node.inputs, scalar, binary_op)?
@@ -119,9 +120,7 @@ impl Interpreter {
                         self.execute_apply_binary_right(&node.inputs, scalar, binary_op)?
                     }
 
-                    Operation::Transpose => {
-                        self.execute_transpose(&node.inputs)?
-                    }
+                    Operation::Transpose => self.execute_transpose(&node.inputs)?,
 
                     _ => {
                         // Other operations not yet implemented in interpreter
@@ -154,10 +153,14 @@ impl Interpreter {
             return Err(GraphBlasError::InvalidValue);
         }
 
-        let a = self.values.get(&inputs[0])
+        let a = self
+            .values
+            .get(&inputs[0])
             .ok_or(GraphBlasError::InvalidValue)?
             .as_matrix()?;
-        let b = self.values.get(&inputs[1])
+        let b = self
+            .values
+            .get(&inputs[1])
             .ok_or(GraphBlasError::InvalidValue)?
             .as_matrix()?;
 
@@ -195,10 +198,14 @@ impl Interpreter {
             return Err(GraphBlasError::InvalidValue);
         }
 
-        let a = self.values.get(&inputs[0])
+        let a = self
+            .values
+            .get(&inputs[0])
             .ok_or(GraphBlasError::InvalidValue)?
             .as_matrix()?;
-        let u = self.values.get(&inputs[1])
+        let u = self
+            .values
+            .get(&inputs[1])
             .ok_or(GraphBlasError::InvalidValue)?
             .as_vector()?;
 
@@ -233,10 +240,14 @@ impl Interpreter {
             return Err(GraphBlasError::InvalidValue);
         }
 
-        let u = self.values.get(&inputs[0])
+        let u = self
+            .values
+            .get(&inputs[0])
             .ok_or(GraphBlasError::InvalidValue)?
             .as_vector()?;
-        let a = self.values.get(&inputs[1])
+        let a = self
+            .values
+            .get(&inputs[1])
             .ok_or(GraphBlasError::InvalidValue)?
             .as_matrix()?;
 
@@ -266,9 +277,13 @@ impl Interpreter {
             return Err(GraphBlasError::InvalidValue);
         }
 
-        let a = self.values.get(&inputs[0])
+        let a = self
+            .values
+            .get(&inputs[0])
             .ok_or(GraphBlasError::InvalidValue)?;
-        let b = self.values.get(&inputs[1])
+        let b = self
+            .values
+            .get(&inputs[1])
             .ok_or(GraphBlasError::InvalidValue)?;
 
         match (a, b) {
@@ -286,7 +301,8 @@ impl Interpreter {
                 Ok(InterpreterValue::Matrix(result))
             }
             (InterpreterValue::Vector(a_vec), InterpreterValue::Vector(b_vec)) => {
-                let result: Vec<f64> = a_vec.iter()
+                let result: Vec<f64> = a_vec
+                    .iter()
                     .zip(b_vec.iter())
                     .map(|(&a_val, &b_val)| self.apply_binary_op(a_val, b_val, op))
                     .collect();
@@ -307,7 +323,9 @@ impl Interpreter {
             return Err(GraphBlasError::InvalidValue);
         }
 
-        let input = self.values.get(&inputs[0])
+        let input = self
+            .values
+            .get(&inputs[0])
             .ok_or(GraphBlasError::InvalidValue)?;
 
         match input {
@@ -325,7 +343,8 @@ impl Interpreter {
                 Ok(InterpreterValue::Matrix(result))
             }
             InterpreterValue::Vector(vec) => {
-                let result: Vec<f64> = vec.iter()
+                let result: Vec<f64> = vec
+                    .iter()
                     .map(|&val| self.apply_unary_op(val, op))
                     .collect();
 
@@ -352,7 +371,9 @@ impl Interpreter {
             _ => 0.0, // TODO: support other types
         };
 
-        let input = self.values.get(&inputs[0])
+        let input = self
+            .values
+            .get(&inputs[0])
             .ok_or(GraphBlasError::InvalidValue)?;
 
         match input {
@@ -370,7 +391,8 @@ impl Interpreter {
                 Ok(InterpreterValue::Matrix(result))
             }
             InterpreterValue::Vector(vec) => {
-                let result: Vec<f64> = vec.iter()
+                let result: Vec<f64> = vec
+                    .iter()
                     .map(|&val| self.apply_binary_op(scalar_val, val, op))
                     .collect();
 
@@ -395,7 +417,9 @@ impl Interpreter {
             _ => 0.0, // TODO: support other types
         };
 
-        let input = self.values.get(&inputs[0])
+        let input = self
+            .values
+            .get(&inputs[0])
             .ok_or(GraphBlasError::InvalidValue)?;
 
         match input {
@@ -413,7 +437,8 @@ impl Interpreter {
                 Ok(InterpreterValue::Matrix(result))
             }
             InterpreterValue::Vector(vec) => {
-                let result: Vec<f64> = vec.iter()
+                let result: Vec<f64> = vec
+                    .iter()
                     .map(|&val| self.apply_binary_op(val, scalar_val, op))
                     .collect();
 
@@ -428,7 +453,9 @@ impl Interpreter {
             return Err(GraphBlasError::InvalidValue);
         }
 
-        let input = self.values.get(&inputs[0])
+        let input = self
+            .values
+            .get(&inputs[0])
             .ok_or(GraphBlasError::InvalidValue)?;
 
         match input {
@@ -456,7 +483,13 @@ impl Interpreter {
             UnaryOpKind::Sqrt => val.sqrt(),
             UnaryOpKind::Exp => val.exp(),
             UnaryOpKind::Log => val.ln(),
-            UnaryOpKind::Not => if val == 0.0 { 1.0 } else { 0.0 },
+            UnaryOpKind::Not => {
+                if val == 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             _ => val,
         }
     }
@@ -469,14 +502,62 @@ impl Interpreter {
             BinaryOpKind::Div => a / b,
             BinaryOpKind::Min => a.min(b),
             BinaryOpKind::Max => a.max(b),
-            BinaryOpKind::And => if a != 0.0 && b != 0.0 { 1.0 } else { 0.0 },
-            BinaryOpKind::Or => if a != 0.0 || b != 0.0 { 1.0 } else { 0.0 },
-            BinaryOpKind::Eq => if (a - b).abs() < 1e-10 { 1.0 } else { 0.0 },
-            BinaryOpKind::Ne => if (a - b).abs() >= 1e-10 { 1.0 } else { 0.0 },
-            BinaryOpKind::Lt => if a < b { 1.0 } else { 0.0 },
-            BinaryOpKind::Le => if a <= b { 1.0 } else { 0.0 },
-            BinaryOpKind::Gt => if a > b { 1.0 } else { 0.0 },
-            BinaryOpKind::Ge => if a >= b { 1.0 } else { 0.0 },
+            BinaryOpKind::And => {
+                if a != 0.0 && b != 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            BinaryOpKind::Or => {
+                if a != 0.0 || b != 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            BinaryOpKind::Eq => {
+                if (a - b).abs() < 1e-10 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            BinaryOpKind::Ne => {
+                if (a - b).abs() >= 1e-10 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            BinaryOpKind::Lt => {
+                if a < b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            BinaryOpKind::Le => {
+                if a <= b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            BinaryOpKind::Gt => {
+                if a > b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            BinaryOpKind::Ge => {
+                if a >= b {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
             _ => 0.0,
         }
     }
@@ -521,15 +602,14 @@ mod tests {
         let graph = builder.build();
 
         let mut interp = Interpreter::new();
-        interp.set_input("A", InterpreterValue::Matrix(vec![
-            vec![1.0, 2.0, 3.0],
-            vec![4.0, 5.0, 6.0],
-        ]));
-        interp.set_input("B", InterpreterValue::Matrix(vec![
-            vec![7.0, 8.0],
-            vec![9.0, 10.0],
-            vec![11.0, 12.0],
-        ]));
+        interp.set_input(
+            "A",
+            InterpreterValue::Matrix(vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]),
+        );
+        interp.set_input(
+            "B",
+            InterpreterValue::Matrix(vec![vec![7.0, 8.0], vec![9.0, 10.0], vec![11.0, 12.0]]),
+        );
 
         let outputs = interp.execute(&graph).unwrap();
         assert_eq!(outputs.len(), 1);
@@ -560,14 +640,14 @@ mod tests {
         let graph = builder.build();
 
         let mut interp = Interpreter::new();
-        interp.set_input("A", InterpreterValue::Matrix(vec![
-            vec![1.0, 2.0],
-            vec![3.0, 4.0],
-        ]));
-        interp.set_input("B", InterpreterValue::Matrix(vec![
-            vec![5.0, 6.0],
-            vec![7.0, 8.0],
-        ]));
+        interp.set_input(
+            "A",
+            InterpreterValue::Matrix(vec![vec![1.0, 2.0], vec![3.0, 4.0]]),
+        );
+        interp.set_input(
+            "B",
+            InterpreterValue::Matrix(vec![vec![5.0, 6.0], vec![7.0, 8.0]]),
+        );
 
         let outputs = interp.execute(&graph).unwrap();
         let result = outputs[0].as_matrix().unwrap();

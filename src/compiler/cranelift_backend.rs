@@ -7,7 +7,7 @@ use crate::core::error::{GraphBlasError, Result};
 use crate::ir::{IRGraph, IRNode, Operation, ScalarType};
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{Module, Linkage};
+use cranelift_module::{Linkage, Module};
 use std::collections::HashMap;
 
 /// Cranelift JIT backend
@@ -28,14 +28,18 @@ impl CraneliftBackend {
 
     /// Generate code for an IR graph
     fn generate_code(&self, graph: &IRGraph) -> Result<CompiledFunction> {
+        log::trace!("Analyzing IR graph for code generation");
+
         // Check if this is a simple MatVec operation we can compile
         let topo_order = graph.topological_order()?;
+        log::trace!("Graph has {} nodes in topological order", topo_order.len());
 
         // Look for MatVec operation
         let mut matvec_node = None;
         for node_id in &topo_order {
             if let Some(node) = graph.get_node(*node_id) {
                 if matches!(node.op, Operation::MatVec { .. }) {
+                    log::debug!("Found MatVec operation, generating specialized SpMV kernel");
                     matvec_node = Some(node);
                     break;
                 }
@@ -51,22 +55,32 @@ impl CraneliftBackend {
         }
 
         // Otherwise, return stub for now
+        log::trace!("No specialized kernel available, returning stub");
         Ok(CompiledFunction::new())
     }
 
     /// Generate a CSR SpMV kernel: y = A * x
     /// Function signature: (row_ptrs, col_indices, values, x, y, nrows)
     fn generate_spmv_kernel(&self, semiring: &crate::ir::SemiringOp) -> Result<CompiledFunction> {
+        log::info!(
+            "Generating SpMV kernel with semiring: add={:?}, mul={:?}",
+            semiring.add_op.binary_op,
+            semiring.mul_op
+        );
+
         // Create JIT module
+        log::debug!("Creating Cranelift JIT module");
         let builder = JITBuilder::new(cranelift_module::default_libcall_names())
             .map_err(|_| GraphBlasError::InvalidValue)?;
         let mut module = JITModule::new(builder);
+        log::trace!("JIT module created");
 
         // Create function context
         let mut ctx = module.make_context();
         let mut func_ctx = FunctionBuilderContext::new();
 
         // Define function signature: void spmv(ptr, ptr, ptr, ptr, ptr, i64)
+        log::debug!("Defining function signature");
         let ptr_type = module.target_config().pointer_type();
         ctx.func.signature.params.push(AbiParam::new(ptr_type)); // row_ptrs
         ctx.func.signature.params.push(AbiParam::new(ptr_type)); // col_indices
@@ -74,8 +88,10 @@ impl CraneliftBackend {
         ctx.func.signature.params.push(AbiParam::new(ptr_type)); // x
         ctx.func.signature.params.push(AbiParam::new(ptr_type)); // y
         ctx.func.signature.params.push(AbiParam::new(types::I64)); // nrows
+        log::trace!("Function signature: void spmv(ptr, ptr, ptr, ptr, ptr, i64)");
 
         // Create function builder
+        log::debug!("Building Cranelift IR for SpMV loop structure");
         let mut builder_fn = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
 
         // Create blocks
@@ -118,13 +134,17 @@ impl CraneliftBackend {
         // Load row_start = row_ptrs[i]
         let i_offset = builder_fn.ins().imul_imm(i, 8); // sizeof(usize) = 8
         let row_start_addr = builder_fn.ins().iadd(row_ptrs, i_offset);
-        let row_start = builder_fn.ins().load(types::I64, MemFlags::trusted(), row_start_addr, 0);
+        let row_start = builder_fn
+            .ins()
+            .load(types::I64, MemFlags::trusted(), row_start_addr, 0);
 
         // Load row_end = row_ptrs[i+1]
         let i_plus_1 = builder_fn.ins().iadd_imm(i, 1);
         let i1_offset = builder_fn.ins().imul_imm(i_plus_1, 8);
         let row_end_addr = builder_fn.ins().iadd(row_ptrs, i1_offset);
-        let row_end = builder_fn.ins().load(types::I64, MemFlags::trusted(), row_end_addr, 0);
+        let row_end = builder_fn
+            .ins()
+            .load(types::I64, MemFlags::trusted(), row_end_addr, 0);
 
         // Initialize sum with semiring identity
         let identity_val = match &semiring.add_op.identity {
@@ -134,7 +154,9 @@ impl CraneliftBackend {
             crate::ir::ScalarValue::Int32(v) => builder_fn.ins().iconst(types::I32, *v as i64),
             _ => builder_fn.ins().f64const(0.0), // Fallback
         };
-        builder_fn.ins().jump(inner_loop_header, &[row_start, identity_val]);
+        builder_fn
+            .ins()
+            .jump(inner_loop_header, &[row_start, identity_val]);
 
         // Inner loop header: while j < row_end
         builder_fn.switch_to_block(inner_loop_header);
@@ -144,7 +166,9 @@ impl CraneliftBackend {
         let sum = builder_fn.block_params(inner_loop_header)[1];
 
         let inner_cmp = builder_fn.ins().icmp(IntCC::UnsignedLessThan, j, row_end);
-        builder_fn.ins().brif(inner_cmp, inner_loop_body, &[], inner_loop_exit, &[sum]);
+        builder_fn
+            .ins()
+            .brif(inner_cmp, inner_loop_body, &[], inner_loop_exit, &[sum]);
 
         // Inner loop body: sum += values[j] * x[col_indices[j]]
         builder_fn.switch_to_block(inner_loop_body);
@@ -152,23 +176,35 @@ impl CraneliftBackend {
         // Load col = col_indices[j]
         let j_offset = builder_fn.ins().imul_imm(j, 8);
         let col_addr = builder_fn.ins().iadd(col_indices, j_offset);
-        let col = builder_fn.ins().load(types::I64, MemFlags::trusted(), col_addr, 0);
+        let col = builder_fn
+            .ins()
+            .load(types::I64, MemFlags::trusted(), col_addr, 0);
 
         // Load val = values[j]
         let val_offset = builder_fn.ins().imul_imm(j, 8); // sizeof(f64) = 8
         let val_addr = builder_fn.ins().iadd(values, val_offset);
-        let val = builder_fn.ins().load(types::F64, MemFlags::trusted(), val_addr, 0);
+        let val = builder_fn
+            .ins()
+            .load(types::F64, MemFlags::trusted(), val_addr, 0);
 
         // Load x_col = x[col]
         let x_offset = builder_fn.ins().imul_imm(col, 8);
         let x_addr = builder_fn.ins().iadd(x, x_offset);
-        let x_val = builder_fn.ins().load(types::F64, MemFlags::trusted(), x_addr, 0);
+        let x_val = builder_fn
+            .ins()
+            .load(types::F64, MemFlags::trusted(), x_addr, 0);
 
         // Compute semiring multiply: val ⊗ x_val
         let prod = self.emit_binary_op(&mut builder_fn, semiring.mul_op, val, x_val, types::F64);
 
         // Compute semiring add: sum ⊕ prod
-        let new_sum = self.emit_binary_op(&mut builder_fn, semiring.add_op.binary_op, sum, prod, types::F64);
+        let new_sum = self.emit_binary_op(
+            &mut builder_fn,
+            semiring.add_op.binary_op,
+            sum,
+            prod,
+            types::F64,
+        );
 
         // Increment j
         let j_next = builder_fn.ins().iadd_imm(j, 1);
@@ -181,7 +217,9 @@ impl CraneliftBackend {
 
         let y_offset = builder_fn.ins().imul_imm(i, 8);
         let y_addr = builder_fn.ins().iadd(y, y_offset);
-        builder_fn.ins().store(MemFlags::trusted(), final_sum, y_addr, 0);
+        builder_fn
+            .ins()
+            .store(MemFlags::trusted(), final_sum, y_addr, 0);
 
         // Increment i and continue outer loop
         let i_next = builder_fn.ins().iadd_imm(i, 1);
@@ -200,9 +238,12 @@ impl CraneliftBackend {
         builder_fn.seal_block(loop_exit);
 
         // Finalize function
+        log::debug!("Finalizing Cranelift IR function");
         builder_fn.finalize();
+        log::trace!("Cranelift IR construction complete");
 
         // Define function in module
+        log::debug!("Declaring and defining function in JIT module");
         let id = module
             .declare_function("spmv", Linkage::Export, &ctx.func.signature)
             .map_err(|_| GraphBlasError::InvalidValue)?;
@@ -212,8 +253,10 @@ impl CraneliftBackend {
             .map_err(|_| GraphBlasError::InvalidValue)?;
 
         // Finalize and get function pointer
+        log::info!("Finalizing JIT compilation and generating native code");
         module.finalize_definitions().unwrap();
         let code_ptr = module.get_finalized_function(id);
+        log::info!("Native code generated at address: {:p}", code_ptr);
 
         Ok(CompiledFunction::with_kernel(code_ptr))
     }
@@ -381,21 +424,27 @@ impl CraneliftBackend {
             (BinaryOpKind::And, types::I8) => builder.ins().band(lhs, rhs),
 
             // Unsupported combinations
-            _ => panic!("Unsupported binary operation {:?} for type {:?}", op, val_type),
+            _ => panic!(
+                "Unsupported binary operation {:?} for type {:?}",
+                op, val_type
+            ),
         }
     }
 }
 
 impl Backend for CraneliftBackend {
     fn compile(&self, graph: &IRGraph) -> Result<CompiledFunction> {
-        self.generate_code(graph)
+        log::debug!("Cranelift backend compiling IR graph");
+        let result = self.generate_code(graph)?;
+        log::debug!("Cranelift compilation complete");
+        Ok(result)
     }
 
     fn supports_feature(&self, feature: BackendFeature) -> bool {
         match feature {
-            BackendFeature::SIMD => true,  // Cranelift supports SIMD
-            BackendFeature::MultiThreading => false,  // Not yet implemented
-            BackendFeature::GPU => false,  // Cranelift is CPU-only
+            BackendFeature::SIMD => true,            // Cranelift supports SIMD
+            BackendFeature::MultiThreading => false, // Not yet implemented
+            BackendFeature::GPU => false,            // Cranelift is CPU-only
         }
     }
 

@@ -27,7 +27,6 @@ fn cons_to_vec(cons: &lexpr::Cons) -> Vec<Value> {
 
 /// Parse a Lisp program from a string
 pub fn parse_program(source: &str) -> Result<Vec<Form>> {
-    log::info!("Parsing Lisp program");
     log::debug!("Source: {}", source);
 
     let mut forms = Vec::new();
@@ -41,14 +40,12 @@ pub fn parse_program(source: &str) -> Result<Vec<Form>> {
         forms.push(parse_form(&value)?);
     }
 
-    log::debug!("Parsed {} form(s)", forms.len());
     Ok(forms)
 }
 
 /// Parse a single S-expression from a string
 pub fn parse_expr_str(source: &str) -> Result<Expr> {
-    let value = lexpr::from_str(source)
-        .map_err(|_| GraphBlasError::InvalidValue)?;
+    let value = lexpr::from_str(source).map_err(|_| GraphBlasError::InvalidValue)?;
     parse_expr(&value)
 }
 
@@ -128,9 +125,7 @@ fn parse_param(value: &Value) -> Result<Param> {
                 .ok_or(GraphBlasError::InvalidValue)?
                 .to_string();
 
-            let type_kw = list[1]
-                .as_keyword()
-                .ok_or(GraphBlasError::InvalidValue)?;
+            let type_kw = list[1].as_keyword().ok_or(GraphBlasError::InvalidValue)?;
 
             let type_annotation = parse_type_annotation(type_kw)?;
             Ok(Param::with_type(name, type_annotation))
@@ -165,14 +160,28 @@ fn parse_expr(value: &Value) -> Result<Expr> {
         Value::Number(n) => parse_number(n),
         Value::Bool(b) => Ok(Expr::Literal(Literal::Bool(*b))),
 
-        // Variables
-        Value::Symbol(s) => Ok(Expr::Variable(s.to_string())),
+        // Variables (with special handling for boolean symbols)
+        Value::Symbol(s) => {
+            let sym = s.to_string();
+            match sym.as_str() {
+                "true" => Ok(Expr::Literal(Literal::Bool(true))),
+                "false" => Ok(Expr::Literal(Literal::Bool(false))),
+                _ => Ok(Expr::Variable(sym)),
+            }
+        }
 
         // Function calls and special forms
         Value::Cons(cons) => {
             if let Some(first) = cons.car().as_symbol() {
                 match first {
                     "let" => parse_let(cons),
+                    "if" => parse_if(cons),
+                    "while" => parse_while(cons),
+                    "for" => parse_for(cons),
+                    "cond" => parse_cond(cons),
+                    "begin" => parse_begin(cons),
+                    "break" => parse_break(cons),
+                    "continue" => parse_continue(cons),
                     _ => parse_func_call(cons),
                 }
             } else {
@@ -210,9 +219,7 @@ fn parse_let(cons: &lexpr::Cons) -> Result<Expr> {
 
     // list[0] is 'let'
     // list[1] is bindings vector
-    let bindings_vec = list[1]
-        .to_vec()
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let bindings_vec = list[1].to_vec().ok_or(GraphBlasError::InvalidValue)?;
 
     let mut bindings = Vec::new();
     for binding in &bindings_vec {
@@ -251,9 +258,7 @@ fn parse_func_call(cons: &lexpr::Cons) -> Result<Expr> {
     }
 
     // list[0] is function name
-    let func_name_str = list[0]
-        .as_symbol()
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let func_name_str = list[0].as_symbol().ok_or(GraphBlasError::InvalidValue)?;
 
     let func = parse_func_name(func_name_str)?;
 
@@ -309,6 +314,190 @@ fn parse_func_name(name: &str) -> Result<FuncName> {
         // Otherwise assume it's a user-defined kernel
         _ => Ok(FuncName::UserKernel(name.to_string())),
     }
+}
+
+/// Parse if expression: (if condition then-expr else-expr)
+fn parse_if(cons: &lexpr::Cons) -> Result<Expr> {
+    let list = cons_to_vec(cons);
+
+    if list.len() < 4 {
+        return Err(GraphBlasError::InvalidValue);
+    }
+
+    // list[0] is 'if'
+    // list[1] is condition
+    // list[2] is then-branch
+    // list[3] is else-branch
+    let condition = Box::new(parse_expr(&list[1])?);
+    let then_branch = Box::new(parse_expr(&list[2])?);
+    let else_branch = Box::new(parse_expr(&list[3])?);
+
+    Ok(Expr::If {
+        condition,
+        then_branch,
+        else_branch,
+    })
+}
+
+/// Parse while loop: (while condition body...)
+fn parse_while(cons: &lexpr::Cons) -> Result<Expr> {
+    let list = cons_to_vec(cons);
+
+    if list.len() < 3 {
+        return Err(GraphBlasError::InvalidValue);
+    }
+
+    // list[0] is 'while'
+    // list[1] is condition
+    // list[2..] is body expressions
+    let condition = Box::new(parse_expr(&list[1])?);
+
+    // Parse body as a block if multiple expressions, otherwise single expr
+    let body = if list.len() > 3 {
+        let mut body_exprs = Vec::new();
+        for expr_val in &list[2..] {
+            body_exprs.push(parse_expr(expr_val)?);
+        }
+        Box::new(Expr::Block(body_exprs))
+    } else {
+        Box::new(parse_expr(&list[2])?)
+    };
+
+    Ok(Expr::While { condition, body })
+}
+
+/// Parse for loop: (for var start end body...) or (for var start end step body...)
+fn parse_for(cons: &lexpr::Cons) -> Result<Expr> {
+    let list = cons_to_vec(cons);
+
+    if list.len() < 5 {
+        return Err(GraphBlasError::InvalidValue);
+    }
+
+    // list[0] is 'for'
+    // list[1] is var
+    // list[2] is start
+    // list[3] is end
+    // list[4] is either step or body
+    // list[5..] is body if step was provided
+
+    let var = list[1]
+        .as_symbol()
+        .ok_or(GraphBlasError::InvalidValue)?
+        .to_string();
+
+    let start = Box::new(parse_expr(&list[2])?);
+    let end = Box::new(parse_expr(&list[3])?);
+
+    // Check if we have a step parameter (numeric literal or expression)
+    // If list.len() > 5, then list[4] is step and list[5..] is body
+    // Otherwise list[4..] is body
+    let (step, body_start_idx) = if list.len() > 5 {
+        (Some(Box::new(parse_expr(&list[4])?)), 5)
+    } else {
+        (None, 4)
+    };
+
+    // Parse body
+    let body = if list.len() > body_start_idx + 1 {
+        let mut body_exprs = Vec::new();
+        for expr_val in &list[body_start_idx..] {
+            body_exprs.push(parse_expr(expr_val)?);
+        }
+        Box::new(Expr::Block(body_exprs))
+    } else {
+        Box::new(parse_expr(&list[body_start_idx])?)
+    };
+
+    Ok(Expr::For {
+        var,
+        start,
+        end,
+        step,
+        body,
+    })
+}
+
+/// Parse cond expression: (cond (test1 result1) (test2 result2) ... (else default))
+fn parse_cond(cons: &lexpr::Cons) -> Result<Expr> {
+    let list = cons_to_vec(cons);
+
+    if list.len() < 2 {
+        return Err(GraphBlasError::InvalidValue);
+    }
+
+    // list[0] is 'cond'
+    // list[1..] are clauses
+
+    let mut clauses = Vec::new();
+    let mut else_clause = None;
+
+    for clause_val in &list[1..] {
+        let clause_cons = clause_val.as_cons().ok_or(GraphBlasError::InvalidValue)?;
+        let clause_list = cons_to_vec(clause_cons);
+
+        if clause_list.len() < 2 {
+            return Err(GraphBlasError::InvalidValue);
+        }
+
+        // Check if it's an else clause
+        if let Some(sym) = clause_list[0].as_symbol() {
+            if sym == "else" {
+                else_clause = Some(Box::new(parse_expr(&clause_list[1])?));
+                continue;
+            }
+        }
+
+        // Regular clause (test result)
+        let test = parse_expr(&clause_list[0])?;
+        let result = parse_expr(&clause_list[1])?;
+        clauses.push((test, result));
+    }
+
+    Ok(Expr::Cond {
+        clauses,
+        else_clause,
+    })
+}
+
+/// Parse begin/block: (begin expr1 expr2 ...)
+fn parse_begin(cons: &lexpr::Cons) -> Result<Expr> {
+    let list = cons_to_vec(cons);
+
+    if list.len() < 2 {
+        return Err(GraphBlasError::InvalidValue);
+    }
+
+    // list[0] is 'begin'
+    // list[1..] are expressions
+
+    let mut exprs = Vec::new();
+    for expr_val in &list[1..] {
+        exprs.push(parse_expr(expr_val)?);
+    }
+
+    Ok(Expr::Block(exprs))
+}
+
+/// Parse break: (break) or (break value)
+fn parse_break(cons: &lexpr::Cons) -> Result<Expr> {
+    let list = cons_to_vec(cons);
+
+    // list[0] is 'break'
+    // list[1] is optional value
+
+    let value = if list.len() > 1 {
+        Some(Box::new(parse_expr(&list[1])?))
+    } else {
+        None
+    };
+
+    Ok(Expr::Break(value))
+}
+
+/// Parse continue: (continue)
+fn parse_continue(_cons: &lexpr::Cons) -> Result<Expr> {
+    Ok(Expr::Continue)
 }
 
 #[cfg(test)]

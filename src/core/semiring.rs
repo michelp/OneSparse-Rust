@@ -61,12 +61,7 @@ impl<T: GraphBLASType> Semiring<T> {
 impl Semiring<f64> {
     /// Plus-times semiring (standard arithmetic): (a + b, a * b, 0)
     pub fn plus_times() -> Result<Self> {
-        Self::new(
-            |a, b| a + b,
-            |a, b| a * b,
-            0.0,
-            "plus_times".to_string(),
-        )
+        Self::new(|a, b| a + b, |a, b| a * b, 0.0, "plus_times".to_string())
     }
 
     /// Min-plus semiring (tropical): (min, +, ∞)

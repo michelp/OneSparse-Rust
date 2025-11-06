@@ -77,14 +77,8 @@ impl Shape {
     }
 
     /// Create a symbolic matrix shape
-    pub fn symbolic_matrix(
-        nrows: impl Into<String>,
-        ncols: impl Into<String>,
-    ) -> Self {
-        Shape::Matrix(
-            Dim::Symbolic(nrows.into()),
-            Dim::Symbolic(ncols.into()),
-        )
+    pub fn symbolic_matrix(nrows: impl Into<String>, ncols: impl Into<String>) -> Self {
+        Shape::Matrix(Dim::Symbolic(nrows.into()), Dim::Symbolic(ncols.into()))
     }
 
     /// Create a matrix shape with mixed concrete/symbolic dimensions

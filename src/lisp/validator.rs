@@ -59,9 +59,10 @@ impl Validator for LispValidator {
         if unmatched_closing > 0 {
             // Too many closing parens
             let plural = if unmatched_closing == 1 { "" } else { "s" };
-            Ok(ValidationResult::Invalid(Some(
-                format!("{} unmatched closing paren{}", unmatched_closing, plural)
-            )))
+            Ok(ValidationResult::Invalid(Some(format!(
+                "{} unmatched closing paren{}",
+                unmatched_closing, plural
+            ))))
         } else if depth > 0 {
             // Unmatched opening parens - need more input
             Ok(ValidationResult::Incomplete)

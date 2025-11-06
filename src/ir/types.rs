@@ -2,19 +2,27 @@
 //
 // This is separate from the runtime type system (types::TypeCode).
 // IR types are used during compilation and optimization.
+//
+// Following SuiteSparse design: unified Tensor type with Shape metadata.
+// Scalars are 0-d tensors, vectors are 1-d tensors, matrices are 2-d tensors.
 
+use crate::ir::shape::Shape;
 use crate::types::TypeCode;
 use std::fmt;
 
-/// IR value type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// IR value type - unified tensor representation
+///
+/// Following SuiteSparse design principle: all sparse objects are tensors
+/// distinguished by their shape. This unifies the IR representation while
+/// maintaining type safety through shape metadata.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IRType {
-    /// Scalar value
-    Scalar(ScalarType),
-    /// Vector (size can be symbolic)
-    Vector(ScalarType),
-    /// Matrix (dimensions can be symbolic)
-    Matrix(ScalarType),
+    /// Unified tensor type with element type and shape
+    ///
+    /// - Scalar: Tensor(ScalarType, Shape::Scalar)
+    /// - Vector: Tensor(ScalarType, Shape::Vector(_))
+    /// - Matrix: Tensor(ScalarType, Shape::Matrix(_, _))
+    Tensor(ScalarType, Shape),
 }
 
 /// Scalar element types
@@ -98,12 +106,79 @@ impl fmt::Display for ScalarType {
     }
 }
 
+impl IRType {
+    /// Create a scalar IR type
+    pub fn scalar(scalar_type: ScalarType) -> Self {
+        IRType::Tensor(scalar_type, Shape::Scalar)
+    }
+
+    /// Create a vector IR type
+    pub fn vector(scalar_type: ScalarType, size: usize) -> Self {
+        IRType::Tensor(scalar_type, Shape::vector(size))
+    }
+
+    /// Create a matrix IR type
+    pub fn matrix(scalar_type: ScalarType, nrows: usize, ncols: usize) -> Self {
+        IRType::Tensor(scalar_type, Shape::matrix(nrows, ncols))
+    }
+
+    /// Create a symbolic vector IR type
+    pub fn symbolic_vector(scalar_type: ScalarType, name: impl Into<String>) -> Self {
+        IRType::Tensor(scalar_type, Shape::symbolic_vector(name))
+    }
+
+    /// Create a symbolic matrix IR type
+    pub fn symbolic_matrix(
+        scalar_type: ScalarType,
+        nrows: impl Into<String>,
+        ncols: impl Into<String>,
+    ) -> Self {
+        IRType::Tensor(scalar_type, Shape::symbolic_matrix(nrows, ncols))
+    }
+
+    /// Get the scalar element type
+    pub fn scalar_type(&self) -> ScalarType {
+        match self {
+            IRType::Tensor(st, _) => *st,
+        }
+    }
+
+    /// Get the shape
+    pub fn shape(&self) -> &Shape {
+        match self {
+            IRType::Tensor(_, shape) => shape,
+        }
+    }
+
+    /// Check if this is a scalar type
+    pub fn is_scalar(&self) -> bool {
+        matches!(self.shape(), Shape::Scalar)
+    }
+
+    /// Check if this is a vector type
+    pub fn is_vector(&self) -> bool {
+        matches!(self.shape(), Shape::Vector(_))
+    }
+
+    /// Check if this is a matrix type
+    pub fn is_matrix(&self) -> bool {
+        matches!(self.shape(), Shape::Matrix(_, _))
+    }
+
+    /// Get rank (number of dimensions)
+    pub fn rank(&self) -> usize {
+        self.shape().rank()
+    }
+}
+
 impl fmt::Display for IRType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            IRType::Scalar(st) => write!(f, "scalar<{}>", st),
-            IRType::Vector(st) => write!(f, "vector<{}>", st),
-            IRType::Matrix(st) => write!(f, "matrix<{}>", st),
+            IRType::Tensor(st, shape) => match shape {
+                Shape::Scalar => write!(f, "scalar<{}>", st),
+                Shape::Vector(_) => write!(f, "vector<{}>{}", st, shape),
+                Shape::Matrix(_, _) => write!(f, "matrix<{}>{}", st, shape),
+            },
         }
     }
 }

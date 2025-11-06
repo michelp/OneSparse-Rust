@@ -4,7 +4,7 @@
 
 use crate::compiler::backend::CompiledFunction;
 use crate::ir::{IRGraph, NodeId};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -21,8 +21,8 @@ pub struct CacheKey {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DimensionInfo {
     Scalar,
-    Vector(Option<usize>),  // None if symbolic
-    Matrix(Option<usize>, Option<usize>),  // None if symbolic
+    Vector(Option<usize>),                // None if symbolic
+    Matrix(Option<usize>, Option<usize>), // None if symbolic
 }
 
 impl CacheKey {
@@ -87,23 +87,23 @@ impl CacheKey {
                     // Hash operation-specific parameters (CRITICAL for correctness)
                     // Different semirings, binary ops, etc. must produce different hashes
                     match &node.op {
-                        crate::ir::Operation::MatVec { semiring } |
-                        crate::ir::Operation::VecMat { semiring } |
-                        crate::ir::Operation::MatMul { semiring, .. } => {
+                        crate::ir::Operation::MatVec { semiring }
+                        | crate::ir::Operation::VecMat { semiring }
+                        | crate::ir::Operation::MatMul { semiring, .. } => {
                             // Hash semiring operations
                             hasher.update(&format!("{:?}", semiring.add_op.binary_op).as_bytes());
                             hasher.update(&format!("{:?}", semiring.mul_op).as_bytes());
                             hasher.update(&format!("{:?}", semiring.add_op.identity).as_bytes());
                         }
-                        crate::ir::Operation::EWiseAdd { binary_op } |
-                        crate::ir::Operation::EWiseMult { binary_op } => {
+                        crate::ir::Operation::EWiseAdd { binary_op }
+                        | crate::ir::Operation::EWiseMult { binary_op } => {
                             hasher.update(&format!("{:?}", binary_op).as_bytes());
                         }
                         crate::ir::Operation::Apply { unary_op } => {
                             hasher.update(&format!("{:?}", unary_op).as_bytes());
                         }
-                        crate::ir::Operation::ApplyBinaryLeft { binary_op, scalar } |
-                        crate::ir::Operation::ApplyBinaryRight { binary_op, scalar } => {
+                        crate::ir::Operation::ApplyBinaryLeft { binary_op, scalar }
+                        | crate::ir::Operation::ApplyBinaryRight { binary_op, scalar } => {
                             hasher.update(&format!("{:?}", binary_op).as_bytes());
                             hasher.update(&format!("{:?}", scalar).as_bytes());
                         }
@@ -124,10 +124,10 @@ impl CacheKey {
                             hasher.update(&format!("{:?}", format).as_bytes());
                         }
                         // Operations without parameters
-                        crate::ir::Operation::Output |
-                        crate::ir::Operation::Transpose |
-                        crate::ir::Operation::Extract {} |
-                        crate::ir::Operation::Assign {} => {}
+                        crate::ir::Operation::Output
+                        | crate::ir::Operation::Transpose
+                        | crate::ir::Operation::Extract {}
+                        | crate::ir::Operation::Assign {} => {}
                     }
 
                     // Hash input dependencies
@@ -196,12 +196,7 @@ impl KernelCache {
     }
 
     /// Insert a compiled kernel into the cache
-    pub fn insert(
-        &self,
-        key: CacheKey,
-        function: CompiledFunction,
-        size_bytes: usize,
-    ) {
+    pub fn insert(&self, key: CacheKey, function: CompiledFunction, size_bytes: usize) {
         let mut cache = self.cache.lock().unwrap();
         let mut current_size = self.current_size.lock().unwrap();
 
@@ -221,11 +216,7 @@ impl KernelCache {
         *current_size += size_bytes;
     }
 
-    fn evict_lru(
-        &self,
-        cache: &mut HashMap<CacheKey, CachedKernel>,
-        current_size: &mut usize,
-    ) {
+    fn evict_lru(&self, cache: &mut HashMap<CacheKey, CachedKernel>, current_size: &mut usize) {
         // Find entry with lowest use count
         if let Some((key_to_remove, size_to_remove)) = cache
             .iter()
@@ -276,7 +267,7 @@ impl Default for KernelCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{GraphBuilder, Shape, ScalarType, semirings};
+    use crate::ir::{semirings, GraphBuilder, ScalarType, Shape};
 
     #[test]
     fn test_cache_key_generation() {
@@ -320,7 +311,9 @@ mod tests {
         let d = builder2
             .input_matrix("D", ScalarType::Float64, Shape::matrix(10, 20))
             .unwrap();
-        builder2.ewise_add(c, d, crate::ir::BinaryOpKind::Add).unwrap();
+        builder2
+            .ewise_add(c, d, crate::ir::BinaryOpKind::Add)
+            .unwrap();
         let graph2 = builder2.build();
 
         let key1 = CacheKey::from_graph(&graph1);

@@ -7,11 +7,12 @@ use std::fs;
 
 #[test]
 fn test_basic_lisp() {
-    let source = fs::read_to_string("tests/lisp/basic.lisp")
-        .expect("Failed to read basic.lisp");
+    let source = fs::read_to_string("tests/lisp/basic.lisp").expect("Failed to read basic.lisp");
 
     let mut eval = Evaluator::new();
-    let results = eval.eval_program(&source).expect("Failed to evaluate program");
+    let results = eval
+        .eval_program(&source)
+        .expect("Failed to evaluate program");
 
     // Test 1: (vector 1 2 3) should create a 3-element vector
     if let Value::Vector(v) = &results[0] {
@@ -69,11 +70,13 @@ fn test_basic_lisp() {
 
 #[test]
 fn test_semiring_operations() {
-    let source = fs::read_to_string("tests/lisp/semirings.lisp")
-        .expect("Failed to read semirings.lisp");
+    let source =
+        fs::read_to_string("tests/lisp/semirings.lisp").expect("Failed to read semirings.lisp");
 
     let mut eval = Evaluator::new();
-    let results = eval.eval_program(&source).expect("Failed to evaluate program");
+    let results = eval
+        .eval_program(&source)
+        .expect("Failed to evaluate program");
 
     // All results should be matrices
     for (i, result) in results.iter().enumerate() {
@@ -102,9 +105,21 @@ fn test_semiring_operations() {
     if let Value::Vector(v) = &results[1] {
         assert_eq!(v.values().len(), 3);
         // Expected: [7, 6, 19] from the test in basic_spmv.rs
-        assert!((v.values()[0] - 7.0).abs() < 1e-10, "Expected 7.0, got {}", v.values()[0]);
-        assert!((v.values()[1] - 6.0).abs() < 1e-10, "Expected 6.0, got {}", v.values()[1]);
-        assert!((v.values()[2] - 19.0).abs() < 1e-10, "Expected 19.0, got {}", v.values()[2]);
+        assert!(
+            (v.values()[0] - 7.0).abs() < 1e-10,
+            "Expected 7.0, got {}",
+            v.values()[0]
+        );
+        assert!(
+            (v.values()[1] - 6.0).abs() < 1e-10,
+            "Expected 6.0, got {}",
+            v.values()[1]
+        );
+        assert!(
+            (v.values()[2] - 19.0).abs() < 1e-10,
+            "Expected 19.0, got {}",
+            v.values()[2]
+        );
     } else {
         panic!("Expected vector in result 1");
     }

@@ -29,7 +29,13 @@ impl PassManager {
 
     pub fn run_all(&mut self, graph: &mut IRGraph) -> Result<()> {
         for pass in &mut self.passes {
-            pass.run(graph)?;
+            log::debug!("Running optimization pass: {}", pass.name());
+            let changed = pass.run(graph)?;
+            if changed {
+                log::debug!("Pass '{}' modified the graph", pass.name());
+            } else {
+                log::trace!("Pass '{}' made no changes", pass.name());
+            }
         }
         Ok(())
     }

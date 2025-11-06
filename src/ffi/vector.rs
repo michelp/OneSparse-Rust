@@ -47,10 +47,7 @@ pub unsafe extern "C" fn GrB_Vector_free(vector: *mut GrB_Vector) -> GrB_Info {
 
 /// Get vector size
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Vector_size(
-    size: *mut GrB_Index,
-    vector: GrB_Vector,
-) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Vector_size(size: *mut GrB_Index, vector: GrB_Vector) -> GrB_Info {
     let result = catch_unwind(|| {
         if size.is_null() || vector.is_null() {
             return GrB_NULL_POINTER;
@@ -63,10 +60,7 @@ pub unsafe extern "C" fn GrB_Vector_size(
 
 /// Get number of stored values
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Vector_nvals(
-    nvals: *mut GrB_Index,
-    vector: GrB_Vector,
-) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Vector_nvals(nvals: *mut GrB_Index, vector: GrB_Vector) -> GrB_Info {
     let result = catch_unwind(|| {
         if nvals.is_null() || vector.is_null() {
             return GrB_NULL_POINTER;

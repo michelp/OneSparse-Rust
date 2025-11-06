@@ -193,7 +193,7 @@ mod tests {
                     format: StorageFormat::Any,
                 },
                 vec![],
-                IRType::Matrix(ScalarType::Float64),
+                IRType::matrix(ScalarType::Float64, 2, 2),
                 Shape::symbolic_matrix("m", "n"),
             )
             .unwrap();
@@ -213,7 +213,7 @@ mod tests {
                     format: StorageFormat::Any,
                 },
                 vec![],
-                IRType::Matrix(ScalarType::Float64),
+                IRType::matrix(ScalarType::Float64, 2, 2),
                 Shape::matrix(10, 10),
             )
             .unwrap();
@@ -222,7 +222,7 @@ mod tests {
             .add_node(
                 Operation::Transpose,
                 vec![a],
-                IRType::Matrix(ScalarType::Float64),
+                IRType::matrix(ScalarType::Float64, 2, 2),
                 Shape::matrix(10, 10),
             )
             .unwrap();

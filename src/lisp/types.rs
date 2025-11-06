@@ -150,6 +150,81 @@ impl TypeChecker {
                 let mut checker = TypeChecker::with_env(new_env);
                 checker.infer_expr(body)
             }
+
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                // Check condition is boolean-ish
+                let _cond_ty = self.infer_expr(condition)?;
+                // TODO: Verify condition is boolean or numeric
+
+                // Type is the union of both branches (for now, just use then branch)
+                let then_ty = self.infer_expr(then_branch)?;
+                let _else_ty = self.infer_expr(else_branch)?;
+                // TODO: Unify types
+                Ok(then_ty)
+            }
+
+            Expr::While { condition, body } => {
+                let _cond_ty = self.infer_expr(condition)?;
+                let _body_ty = self.infer_expr(body)?;
+                // While loops return nil
+                Ok(Type::Scalar(ScalarType::Bool)) // Using bool as stand-in for nil
+            }
+
+            Expr::For {
+                var: _,
+                start,
+                end,
+                step,
+                body,
+            } => {
+                let _start_ty = self.infer_expr(start)?;
+                let _end_ty = self.infer_expr(end)?;
+                if let Some(step_expr) = step {
+                    let _step_ty = self.infer_expr(step_expr)?;
+                }
+                let _body_ty = self.infer_expr(body)?;
+                // For loops return nil
+                Ok(Type::Scalar(ScalarType::Bool))
+            }
+
+            Expr::Cond {
+                clauses,
+                else_clause,
+            } => {
+                // Type check all clauses
+                let mut result_ty = None;
+                for (test, result) in clauses {
+                    let _test_ty = self.infer_expr(test)?;
+                    let res_ty = self.infer_expr(result)?;
+                    if result_ty.is_none() {
+                        result_ty = Some(res_ty);
+                    }
+                    // TODO: Unify all clause result types
+                }
+
+                if let Some(else_expr) = else_clause {
+                    let _else_ty = self.infer_expr(else_expr)?;
+                }
+
+                result_ty.ok_or(GraphBlasError::InvalidValue)
+            }
+
+            Expr::Block(exprs) => {
+                let mut last_ty = Type::Scalar(ScalarType::Bool); // nil type
+                for expr in exprs {
+                    last_ty = self.infer_expr(expr)?;
+                }
+                Ok(last_ty)
+            }
+
+            Expr::Break(_) | Expr::Continue => {
+                // Control flow doesn't have a value type
+                Ok(Type::Scalar(ScalarType::Bool))
+            }
         }
     }
 

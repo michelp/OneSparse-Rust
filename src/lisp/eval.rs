@@ -27,6 +27,19 @@ pub enum Value {
     Nil,
 }
 
+impl Value {
+    /// Check if a value is "truthy" for conditional expressions
+    pub fn is_truthy(&self) -> bool {
+        match self {
+            Value::Bool(b) => *b,
+            Value::Number(n) => *n != 0.0,
+            Value::Nil => false,
+            // Vectors and matrices are always truthy if they exist
+            Value::Vector(_) | Value::Matrix(_) => true,
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -103,8 +116,6 @@ impl Evaluator {
 
     /// Evaluate a Lisp program (multiple forms)
     pub fn eval_program(&mut self, source: &str) -> Result<Vec<Value>> {
-        log::info!("Evaluating Lisp program");
-
         let forms = parse_program(source)?;
         let mut results = Vec::new();
 
@@ -113,7 +124,6 @@ impl Evaluator {
             results.push(result);
         }
 
-        log::info!("Evaluation complete");
         Ok(results)
     }
 
@@ -121,7 +131,8 @@ impl Evaluator {
     pub fn eval_form(&mut self, form: &Form) -> Result<Value> {
         match form {
             Form::DefKernel { name, params, body } => {
-                self.env.define_kernel(name.clone(), params.clone(), body.clone());
+                self.env
+                    .define_kernel(name.clone(), params.clone(), body.clone());
                 Ok(Value::Nil)
             }
             Form::Expr(expr) => self.eval_expr(expr),
@@ -145,6 +156,112 @@ impl Evaluator {
                 // Let bindings not supported yet due to lack of Clone
                 Err(GraphBlasError::NotImplemented)
             }
+
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let cond_val = self.eval_expr(condition)?;
+                if cond_val.is_truthy() {
+                    self.eval_expr(then_branch)
+                } else {
+                    self.eval_expr(else_branch)
+                }
+            }
+
+            Expr::While { condition, body } => {
+                loop {
+                    let cond_val = self.eval_expr(condition)?;
+                    if !cond_val.is_truthy() {
+                        break;
+                    }
+
+                    match self.eval_expr(body) {
+                        Err(GraphBlasError::LoopBreak) => break,
+                        Err(GraphBlasError::LoopContinue) => continue,
+                        Err(e) => return Err(e),
+                        Ok(_) => {}
+                    }
+                }
+                Ok(Value::Nil)
+            }
+
+            Expr::For {
+                var,
+                start,
+                end,
+                step,
+                body,
+            } => {
+                let start_val = self.eval_expr(start)?;
+                let end_val = self.eval_expr(end)?;
+                let step_val = if let Some(step_expr) = step {
+                    self.eval_expr(step_expr)?
+                } else {
+                    Value::Number(1.0)
+                };
+
+                // Extract numeric values
+                let (start_num, end_num, step_num) = match (start_val, end_val, step_val) {
+                    (Value::Number(s), Value::Number(e), Value::Number(st)) => (s, e, st),
+                    _ => return Err(GraphBlasError::DomainMismatch),
+                };
+
+                // For loop iteration
+                let mut i = start_num;
+                loop {
+                    if (step_num > 0.0 && i >= end_num) || (step_num < 0.0 && i <= end_num) {
+                        break;
+                    }
+
+                    // Bind loop variable (for now, just log it since we can't store it)
+                    log::trace!("For loop: {} = {}", var, i);
+
+                    match self.eval_expr(body) {
+                        Err(GraphBlasError::LoopBreak) => break,
+                        Err(GraphBlasError::LoopContinue) => {}
+                        Err(e) => return Err(e),
+                        Ok(_) => {}
+                    }
+
+                    i += step_num;
+                }
+                Ok(Value::Nil)
+            }
+
+            Expr::Cond {
+                clauses,
+                else_clause,
+            } => {
+                for (test, result) in clauses {
+                    let test_val = self.eval_expr(test)?;
+                    if test_val.is_truthy() {
+                        return self.eval_expr(result);
+                    }
+                }
+                // No clause matched, evaluate else clause if present
+                if let Some(else_expr) = else_clause {
+                    self.eval_expr(else_expr)
+                } else {
+                    Ok(Value::Nil)
+                }
+            }
+
+            Expr::Block(exprs) => {
+                let mut last_val = Value::Nil;
+                for expr in exprs {
+                    last_val = self.eval_expr(expr)?;
+                }
+                Ok(last_val)
+            }
+
+            Expr::Break(_value) => {
+                // TODO: Support break with value
+                Err(GraphBlasError::LoopBreak)
+            }
+
+            Expr::Continue => Err(GraphBlasError::LoopContinue),
         }
     }
 
@@ -184,6 +301,9 @@ impl Evaluator {
             FuncName::UserKernel(name) if name == "set-log-level" => self.eval_set_log_level(args),
             FuncName::UserKernel(name) if name == "get-log-level" => self.eval_get_log_level(args),
 
+            // Testing utilities
+            FuncName::UserKernel(name) if name == "assert" => self.eval_assert(args),
+
             // Other operations not yet implemented
             _ => Err(GraphBlasError::NotImplemented),
         }
@@ -209,7 +329,14 @@ impl Evaluator {
 
                 // Matrix multiply: output = left_matrix * right_matrix
                 let mut output = Matrix::new(left_matrix.nrows(), right_matrix.ncols())?;
-                crate::ops::mxm(&mut output, None, &left_matrix, &right_matrix, &semiring, None)?;
+                crate::ops::mxm(
+                    &mut output,
+                    None,
+                    &left_matrix,
+                    &right_matrix,
+                    &semiring,
+                    None,
+                )?;
                 Ok(Value::Matrix(output))
             }
             _ => Err(GraphBlasError::DomainMismatch),
@@ -382,6 +509,34 @@ impl Evaluator {
         Ok(Value::Number(level_num))
     }
 
+    /// Assert that a condition is true: (assert condition) or (assert condition message)
+    fn eval_assert(&mut self, args: &[Expr]) -> Result<Value> {
+        if args.is_empty() || args.len() > 2 {
+            return Err(GraphBlasError::InvalidValue);
+        }
+
+        // Evaluate the condition
+        let condition = self.eval_expr(&args[0])?;
+
+        if !condition.is_truthy() {
+            // Assertion failed - get optional message
+            let message = if args.len() > 1 {
+                // Try to format the second argument as a message
+                match self.eval_expr(&args[1])? {
+                    Value::Number(n) => format!("Assertion failed: {}", n),
+                    Value::Bool(b) => format!("Assertion failed: {}", b),
+                    _ => "Assertion failed".to_string(),
+                }
+            } else {
+                "Assertion failed".to_string()
+            };
+
+            return Err(GraphBlasError::Panic(message));
+        }
+
+        Ok(Value::Bool(true))
+    }
+
     /// Get a reference to the environment
     pub fn env(&self) -> &Environment {
         &self.env
@@ -447,4 +602,142 @@ mod tests {
     // fn test_eval_let_binding() {
     //     // Let bindings not yet supported
     // }
+
+    #[test]
+    fn test_eval_if_true() {
+        let mut eval = Evaluator::new();
+        let results = eval.eval_program("(if true 42 0)").unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Number(n) if (n - 42.0).abs() < 1e-10));
+    }
+
+    #[test]
+    fn test_eval_if_false() {
+        let mut eval = Evaluator::new();
+        let results = eval.eval_program("(if false 42 99)").unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Number(n) if (n - 99.0).abs() < 1e-10));
+    }
+
+    #[test]
+    fn test_eval_if_numeric_condition() {
+        let mut eval = Evaluator::new();
+        // 0 is falsy, non-zero is truthy
+        let results1 = eval.eval_program("(if 0 42 99)").unwrap();
+        assert!(matches!(results1[0], Value::Number(n) if (n - 99.0).abs() < 1e-10));
+
+        let results2 = eval.eval_program("(if 1 42 99)").unwrap();
+        assert!(matches!(results2[0], Value::Number(n) if (n - 42.0).abs() < 1e-10));
+    }
+
+    #[test]
+    fn test_eval_cond() {
+        let mut eval = Evaluator::new();
+        let program = "(cond (false 1) (false 2) (true 3) (else 4))";
+        let results = eval.eval_program(program).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Number(n) if (n - 3.0).abs() < 1e-10));
+    }
+
+    #[test]
+    fn test_eval_cond_else() {
+        let mut eval = Evaluator::new();
+        let program = "(cond (false 1) (false 2) (else 99))";
+        let results = eval.eval_program(program).unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Number(n) if (n - 99.0).abs() < 1e-10));
+    }
+
+    #[test]
+    fn test_eval_begin() {
+        let mut eval = Evaluator::new();
+        // Begin should return the last expression
+        let results = eval.eval_program("(begin 1 2 3 42)").unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Number(n) if (n - 42.0).abs() < 1e-10));
+    }
+
+    #[test]
+    fn test_eval_for_loop() {
+        let mut eval = Evaluator::new();
+        // For loop should return nil
+        // Note: Without variable bindings working, we can't test the body properly
+        // But we can test that it executes without error
+        let results = eval.eval_program("(for i 0 5 42)").unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Nil));
+    }
+
+    #[test]
+    fn test_eval_for_loop_with_step() {
+        let mut eval = Evaluator::new();
+        let results = eval.eval_program("(for i 0 10 2 42)").unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Nil));
+    }
+
+    #[test]
+    fn test_eval_while_loop() {
+        let mut eval = Evaluator::new();
+        // While with false condition should not execute body
+        let results = eval.eval_program("(while false 42)").unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Nil));
+    }
+
+    #[test]
+    fn test_break_outside_loop() {
+        let mut eval = Evaluator::new();
+        // Break outside loop should error
+        let results = eval.eval_program("(break)");
+        assert!(matches!(results, Err(GraphBlasError::LoopBreak)));
+    }
+
+    #[test]
+    fn test_continue_outside_loop() {
+        let mut eval = Evaluator::new();
+        // Continue outside loop should error
+        let results = eval.eval_program("(continue)");
+        assert!(matches!(results, Err(GraphBlasError::LoopContinue)));
+    }
+
+    #[test]
+    fn test_assert_true() {
+        let mut eval = Evaluator::new();
+        let results = eval.eval_program("(assert true)").unwrap();
+        assert_eq!(results.len(), 1);
+        assert!(matches!(results[0], Value::Bool(true)));
+    }
+
+    #[test]
+    fn test_assert_truthy() {
+        let mut eval = Evaluator::new();
+        // Non-zero is truthy
+        let results = eval.eval_program("(assert 42)").unwrap();
+        assert!(matches!(results[0], Value::Bool(true)));
+    }
+
+    #[test]
+    fn test_assert_false() {
+        let mut eval = Evaluator::new();
+        let results = eval.eval_program("(assert false)");
+        assert!(matches!(results, Err(GraphBlasError::Panic(_))));
+    }
+
+    #[test]
+    fn test_assert_with_message() {
+        let mut eval = Evaluator::new();
+        let results = eval.eval_program("(assert false 123)");
+        assert!(matches!(results, Err(GraphBlasError::Panic(msg)) if msg.contains("123")));
+    }
+
+    #[test]
+    fn test_assert_in_if() {
+        let mut eval = Evaluator::new();
+        // Assert in conditional branch
+        let results = eval
+            .eval_program("(if true (assert true) (assert false))")
+            .unwrap();
+        assert!(matches!(results[0], Value::Bool(true)));
+    }
 }

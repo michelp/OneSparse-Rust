@@ -48,15 +48,14 @@ fn test_e2e_matmul_computation() {
     let graph = builder.build();
 
     let mut interp = Interpreter::new();
-    interp.set_input("A", InterpreterValue::Matrix(vec![
-        vec![1.0, 0.0, 2.0],
-        vec![0.0, 3.0, 0.0],
-    ]));
-    interp.set_input("B", InterpreterValue::Matrix(vec![
-        vec![4.0, 0.0],
-        vec![0.0, 5.0],
-        vec![6.0, 0.0],
-    ]));
+    interp.set_input(
+        "A",
+        InterpreterValue::Matrix(vec![vec![1.0, 0.0, 2.0], vec![0.0, 3.0, 0.0]]),
+    );
+    interp.set_input(
+        "B",
+        InterpreterValue::Matrix(vec![vec![4.0, 0.0], vec![0.0, 5.0], vec![6.0, 0.0]]),
+    );
 
     let outputs = interp.execute(&graph).unwrap();
     let result = outputs[0].as_matrix().unwrap();
@@ -87,11 +86,10 @@ fn test_e2e_matvec_computation() {
     let graph = builder.build();
 
     let mut interp = Interpreter::new();
-    interp.set_input("A", InterpreterValue::Matrix(vec![
-        vec![1.0, 2.0],
-        vec![3.0, 4.0],
-        vec![5.0, 6.0],
-    ]));
+    interp.set_input(
+        "A",
+        InterpreterValue::Matrix(vec![vec![1.0, 2.0], vec![3.0, 4.0], vec![5.0, 6.0]]),
+    );
     interp.set_input("u", InterpreterValue::Vector(vec![2.0, 3.0]));
 
     let outputs = interp.execute(&graph).unwrap();
@@ -130,14 +128,14 @@ fn test_e2e_ewise_add_computation() {
     let graph = builder.build();
 
     let mut interp = Interpreter::new();
-    interp.set_input("A", InterpreterValue::Matrix(vec![
-        vec![1.0, 2.0],
-        vec![3.0, 4.0],
-    ]));
-    interp.set_input("B", InterpreterValue::Matrix(vec![
-        vec![10.0, 20.0],
-        vec![30.0, 40.0],
-    ]));
+    interp.set_input(
+        "A",
+        InterpreterValue::Matrix(vec![vec![1.0, 2.0], vec![3.0, 4.0]]),
+    );
+    interp.set_input(
+        "B",
+        InterpreterValue::Matrix(vec![vec![10.0, 20.0], vec![30.0, 40.0]]),
+    );
 
     let outputs = interp.execute(&graph).unwrap();
     let result = outputs[0].as_matrix().unwrap();
@@ -199,10 +197,10 @@ fn test_e2e_apply_computation() {
     let graph = builder.build();
 
     let mut interp = Interpreter::new();
-    interp.set_input("A", InterpreterValue::Matrix(vec![
-        vec![-1.0, 2.0],
-        vec![-3.0, -4.0],
-    ]));
+    interp.set_input(
+        "A",
+        InterpreterValue::Matrix(vec![vec![-1.0, 2.0], vec![-3.0, -4.0]]),
+    );
 
     let outputs = interp.execute(&graph).unwrap();
     let result = outputs[0].as_matrix().unwrap();
@@ -245,10 +243,10 @@ fn test_e2e_transpose_computation() {
     let graph = builder.build();
 
     let mut interp = Interpreter::new();
-    interp.set_input("A", InterpreterValue::Matrix(vec![
-        vec![1.0, 2.0, 3.0],
-        vec![4.0, 5.0, 6.0],
-    ]));
+    interp.set_input(
+        "A",
+        InterpreterValue::Matrix(vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]]),
+    );
 
     let outputs = interp.execute(&graph).unwrap();
     let result = outputs[0].as_matrix().unwrap();
@@ -287,18 +285,18 @@ fn test_e2e_chained_operations() {
     let graph = builder.build();
 
     let mut interp = Interpreter::new();
-    interp.set_input("A", InterpreterValue::Matrix(vec![
-        vec![1.0, 2.0],
-        vec![3.0, 4.0],
-    ]));
-    interp.set_input("B", InterpreterValue::Matrix(vec![
-        vec![5.0, 6.0],
-        vec![7.0, 8.0],
-    ]));
-    interp.set_input("D", InterpreterValue::Matrix(vec![
-        vec![1.0, 1.0],
-        vec![1.0, 1.0],
-    ]));
+    interp.set_input(
+        "A",
+        InterpreterValue::Matrix(vec![vec![1.0, 2.0], vec![3.0, 4.0]]),
+    );
+    interp.set_input(
+        "B",
+        InterpreterValue::Matrix(vec![vec![5.0, 6.0], vec![7.0, 8.0]]),
+    );
+    interp.set_input(
+        "D",
+        InterpreterValue::Matrix(vec![vec![1.0, 1.0], vec![1.0, 1.0]]),
+    );
 
     let outputs = interp.execute(&graph).unwrap();
     let result = outputs[0].as_matrix().unwrap();
@@ -332,16 +330,14 @@ fn test_e2e_complex_expression() {
     let graph = builder.build();
 
     let mut interp = Interpreter::new();
-    interp.set_input("A", InterpreterValue::Matrix(vec![
-        vec![1.0, 2.0],
-        vec![3.0, 4.0],
-        vec![5.0, 6.0],
-    ]));
-    interp.set_input("B", InterpreterValue::Matrix(vec![
-        vec![7.0, 8.0],
-        vec![9.0, 10.0],
-        vec![11.0, 12.0],
-    ]));
+    interp.set_input(
+        "A",
+        InterpreterValue::Matrix(vec![vec![1.0, 2.0], vec![3.0, 4.0], vec![5.0, 6.0]]),
+    );
+    interp.set_input(
+        "B",
+        InterpreterValue::Matrix(vec![vec![7.0, 8.0], vec![9.0, 10.0], vec![11.0, 12.0]]),
+    );
 
     let outputs = interp.execute(&graph).unwrap();
     assert_eq!(outputs.len(), 1);

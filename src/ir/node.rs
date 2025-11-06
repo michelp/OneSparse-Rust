@@ -41,18 +41,13 @@ pub struct IRNode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Operation {
     // ===== Input/Output Operations =====
-
     /// Input placeholder (for function parameters)
-    Input {
-        name: String,
-        format: StorageFormat,
-    },
+    Input { name: String, format: StorageFormat },
 
     /// Output (marks a result)
     Output,
 
     // ===== Matrix Multiplication =====
-
     /// Matrix-matrix multiplication (C = A × B)
     MatMul {
         semiring: SemiringOp,
@@ -60,33 +55,21 @@ pub enum Operation {
     },
 
     /// Matrix-vector multiplication (w = A × u)
-    MatVec {
-        semiring: SemiringOp,
-    },
+    MatVec { semiring: SemiringOp },
 
     /// Vector-matrix multiplication (w = u × A)
-    VecMat {
-        semiring: SemiringOp,
-    },
+    VecMat { semiring: SemiringOp },
 
     // ===== Element-wise Operations =====
-
     /// Element-wise addition (union of sparse structures)
-    EWiseAdd {
-        binary_op: BinaryOpKind,
-    },
+    EWiseAdd { binary_op: BinaryOpKind },
 
     /// Element-wise multiplication (intersection of sparse structures)
-    EWiseMult {
-        binary_op: BinaryOpKind,
-    },
+    EWiseMult { binary_op: BinaryOpKind },
 
     // ===== Apply Operations =====
-
     /// Apply unary operator
-    Apply {
-        unary_op: UnaryOpKind,
-    },
+    Apply { unary_op: UnaryOpKind },
 
     /// Apply binary operator with bound left operand
     ApplyBinaryLeft {
@@ -101,14 +84,10 @@ pub enum Operation {
     },
 
     // ===== Selection =====
-
     /// Select elements based on predicate
-    Select {
-        predicate: SelectOp,
-    },
+    Select { predicate: SelectOp },
 
     // ===== Structural Operations =====
-
     /// Transpose matrix
     Transpose,
 
@@ -129,17 +108,11 @@ pub enum Operation {
     },
 
     // ===== Reduction Operations =====
-
     /// Reduce matrix to vector (along rows or columns)
-    ReduceMatrix {
-        monoid: MonoidOp,
-        axis: Axis,
-    },
+    ReduceMatrix { monoid: MonoidOp, axis: Axis },
 
     /// Reduce vector to scalar
-    ReduceVector {
-        monoid: MonoidOp,
-    },
+    ReduceVector { monoid: MonoidOp },
 }
 
 /// Axis for reduction

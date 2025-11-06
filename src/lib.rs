@@ -15,22 +15,22 @@
 extern crate lazy_static;
 
 // Public modules
-pub mod types;
 pub mod core;
 pub mod ffi;
+pub mod types;
 
 // JIT compilation infrastructure
-pub mod ir;
 pub mod compiler;
-pub mod optimizer;
+pub mod ir;
 pub mod ops;
+pub mod optimizer;
 
 // Lisp DSL for defining kernels
 pub mod lisp;
 
 // Re-export commonly used items for convenience
-pub use types::{GraphBLASType, TypeCode, TypeDescriptor};
 pub use core::{GraphBlasError, Result};
+pub use types::{GraphBLASType, TypeCode, TypeDescriptor};
 
 // FFI exports are automatically available through #[no_mangle]
 // functions in the ffi module

@@ -43,9 +43,16 @@ impl CSEPass {
             (Transpose, Transpose) => true,
 
             // MatMul: compare semirings and format
-            (MatMul { semiring: s1, format: f1 }, MatMul { semiring: s2, format: f2 }) => {
-                s1.add_op == s2.add_op && s1.mul_op == s2.mul_op && f1 == f2
-            }
+            (
+                MatMul {
+                    semiring: s1,
+                    format: f1,
+                },
+                MatMul {
+                    semiring: s2,
+                    format: f2,
+                },
+            ) => s1.add_op == s2.add_op && s1.mul_op == s2.mul_op && f1 == f2,
 
             // MatVec: compare semirings
             (MatVec { semiring: s1 }, MatVec { semiring: s2 }) => {
@@ -238,7 +245,7 @@ impl Default for CSEPass {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{BinaryOpKind, GraphBuilder, ScalarType, Shape, UnaryOpKind, semirings};
+    use crate::ir::{semirings, BinaryOpKind, GraphBuilder, ScalarType, Shape, UnaryOpKind};
 
     #[test]
     fn test_cse_pass_creation() {

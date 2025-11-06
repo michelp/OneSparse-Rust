@@ -2,6 +2,7 @@
 //
 // Idiomatic Rust implementation of sparse matrices
 
+use crate::core::container::SparseContainer;
 use crate::core::error::Result;
 use crate::types::{GraphBLASType, TypeCode};
 
@@ -27,65 +28,51 @@ pub enum SparseStorage<T> {
     },
 }
 
-/// Sparse matrix
-pub struct Matrix<T: GraphBLASType> {
-    /// Number of rows
-    nrows: usize,
-    /// Number of columns
-    ncols: usize,
-    /// Element type code
-    type_code: TypeCode,
-    /// Sparse storage
-    storage: SparseStorage<T>,
-}
+/// Sparse matrix wrapper around unified SparseContainer
+///
+/// Following SuiteSparse design: Matrix is a facade over the unified internal representation.
+/// This maintains the ergonomic Matrix API while sharing implementation with Vector and Scalar.
+pub struct Matrix<T: GraphBLASType>(SparseContainer<T>);
 
 impl<T: GraphBLASType> Matrix<T> {
     /// Create a new empty matrix
     pub fn new(nrows: usize, ncols: usize) -> Result<Self> {
-        Ok(Self {
-            nrows,
-            ncols,
-            type_code: T::TYPE_CODE,
-            storage: SparseStorage::COO {
-                row_indices: Vec::new(),
-                col_indices: Vec::new(),
-                values: Vec::new(),
-            },
-        })
+        Ok(Matrix(SparseContainer::new_matrix(nrows, ncols)?))
     }
 
     /// Get number of rows
     pub fn nrows(&self) -> usize {
-        self.nrows
+        self.0.nrows()
     }
 
     /// Get number of columns
     pub fn ncols(&self) -> usize {
-        self.ncols
+        self.0.ncols()
+    }
+
+    /// Get shape as (nrows, ncols)
+    pub fn shape(&self) -> (usize, usize) {
+        self.0.shape()
     }
 
     /// Get number of stored values
     pub fn nvals(&self) -> usize {
-        match &self.storage {
-            SparseStorage::COO { values, .. } => values.len(),
-            SparseStorage::CSR { values, .. } => values.len(),
-            SparseStorage::CSC { values, .. } => values.len(),
-        }
+        self.0.nvals()
     }
 
     /// Get type code
     pub fn type_code(&self) -> TypeCode {
-        self.type_code
+        self.0.type_code()
     }
 
     /// Get reference to storage
     pub fn storage(&self) -> &SparseStorage<T> {
-        &self.storage
+        self.0.storage()
     }
 
     /// Get mutable reference to storage
     pub fn storage_mut(&mut self) -> &mut SparseStorage<T> {
-        &mut self.storage
+        self.0.storage_mut()
     }
 
     /// Create a matrix with CSR storage
@@ -96,16 +83,63 @@ impl<T: GraphBLASType> Matrix<T> {
     /// * `row_ptrs` - Row pointer array (length = nrows + 1)
     /// * `col_indices` - Column indices for each non-zero
     /// * `values` - Values for each non-zero
-    pub fn from_csr(nrows: usize, ncols: usize, row_ptrs: Vec<usize>, col_indices: Vec<usize>, values: Vec<T>) -> Result<Self> {
-        Ok(Self {
+    pub fn from_csr(
+        nrows: usize,
+        ncols: usize,
+        row_ptrs: Vec<usize>,
+        col_indices: Vec<usize>,
+        values: Vec<T>,
+    ) -> Result<Self> {
+        Ok(Matrix(SparseContainer::from_csr(
             nrows,
             ncols,
-            type_code: T::TYPE_CODE,
-            storage: SparseStorage::CSR {
-                row_ptrs,
-                col_indices,
-                values,
-            },
-        })
+            row_ptrs,
+            col_indices,
+            values,
+        )?))
+    }
+
+    /// Create a matrix with CSC storage
+    pub fn from_csc(
+        nrows: usize,
+        ncols: usize,
+        col_ptrs: Vec<usize>,
+        row_indices: Vec<usize>,
+        values: Vec<T>,
+    ) -> Result<Self> {
+        Ok(Matrix(SparseContainer::from_csc(
+            nrows,
+            ncols,
+            col_ptrs,
+            row_indices,
+            values,
+        )?))
+    }
+
+    /// Create a matrix with COO storage
+    pub fn from_coo(
+        nrows: usize,
+        ncols: usize,
+        row_indices: Vec<usize>,
+        col_indices: Vec<usize>,
+        values: Vec<T>,
+    ) -> Result<Self> {
+        Ok(Matrix(SparseContainer::from_coo(
+            nrows,
+            ncols,
+            row_indices,
+            col_indices,
+            values,
+        )?))
+    }
+
+    /// Get reference to the inner container (for internal use)
+    pub(crate) fn inner(&self) -> &SparseContainer<T> {
+        &self.0
+    }
+
+    /// Get mutable reference to the inner container (for internal use)
+    pub(crate) fn inner_mut(&mut self) -> &mut SparseContainer<T> {
+        &mut self.0
     }
 }

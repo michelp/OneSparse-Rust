@@ -64,10 +64,7 @@ lazy_static::lazy_static! {
 /// # Safety
 /// This function must be called from C with valid pointers.
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Type_new(
-    type_: *mut GrB_Type,
-    sizeof_ctype: usize,
-) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Type_new(type_: *mut GrB_Type, sizeof_ctype: usize) -> GrB_Info {
     let result = catch_unwind(|| {
         // Validate output pointer
         if type_.is_null() {
@@ -76,9 +73,8 @@ pub unsafe extern "C" fn GrB_Type_new(
 
         // Create a user-defined type descriptor
         // Note: We can't know the Rust type at runtime, so we use a placeholder
-        let descriptor = TypeDescriptor::new_user_defined::<u8>(
-            format!("user_type_{}", sizeof_ctype)
-        );
+        let descriptor =
+            TypeDescriptor::new_user_defined::<u8>(format!("user_type_{}", sizeof_ctype));
 
         // Register and get handle
         let handle = TYPE_REGISTRY.insert(descriptor);
@@ -178,7 +174,10 @@ mod tests {
 
     #[test]
     fn test_builtin_type_sizes() {
-        assert_eq!(get_type_size(GrB_BOOL).unwrap(), std::mem::size_of::<bool>());
+        assert_eq!(
+            get_type_size(GrB_BOOL).unwrap(),
+            std::mem::size_of::<bool>()
+        );
         assert_eq!(get_type_size(GrB_INT32).unwrap(), 4);
         assert_eq!(get_type_size(GrB_INT64).unwrap(), 8);
         assert_eq!(get_type_size(GrB_FP32).unwrap(), 4);

@@ -70,8 +70,8 @@ pub fn ewadd_matrix<T: GraphBLASType>(
 
     // Build IR graph
     let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
 
     let a_shape = Shape::matrix(a.nrows(), a.ncols());
     let b_shape = Shape::matrix(b.nrows(), b.ncols());
@@ -115,9 +115,7 @@ pub fn ewadd_matrix<T: GraphBLASType>(
         a_storage as *const _ as *const (),
         b_storage as *const _ as *const (),
     ];
-    let outputs: Vec<*mut ()> = vec![
-        c_storage as *mut _ as *mut (),
-    ];
+    let outputs: Vec<*mut ()> = vec![c_storage as *mut _ as *mut ()];
 
     // TODO: Real execution would compute C = A + B element-wise
     function.execute(&inputs, &outputs)?;
@@ -165,8 +163,8 @@ pub fn ewmult_matrix<T: GraphBLASType>(
 
     // Build IR graph
     let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
 
     let a_shape = Shape::matrix(a.nrows(), a.ncols());
     let b_shape = Shape::matrix(b.nrows(), b.ncols());
@@ -210,9 +208,7 @@ pub fn ewmult_matrix<T: GraphBLASType>(
         a_storage as *const _ as *const (),
         b_storage as *const _ as *const (),
     ];
-    let outputs: Vec<*mut ()> = vec![
-        c_storage as *mut _ as *mut (),
-    ];
+    let outputs: Vec<*mut ()> = vec![c_storage as *mut _ as *mut ()];
 
     // TODO: Real execution would compute C = A .* B element-wise
     function.execute(&inputs, &outputs)?;
@@ -260,8 +256,8 @@ pub fn ewadd_vector<T: GraphBLASType>(
 
     // Build IR graph
     let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
 
     let u_shape = Shape::vector(u.size());
     let v_shape = Shape::vector(v.size());
@@ -298,9 +294,7 @@ pub fn ewadd_vector<T: GraphBLASType>(
         v.indices().as_ptr() as *const (),
         v.values().as_ptr() as *const (),
     ];
-    let outputs: Vec<*mut ()> = vec![
-        w as *mut Vector<T> as *mut (),
-    ];
+    let outputs: Vec<*mut ()> = vec![w as *mut Vector<T> as *mut ()];
 
     // TODO: Real execution would compute w = u + v element-wise
     function.execute(&inputs, &outputs)?;
@@ -348,8 +342,8 @@ pub fn ewmult_vector<T: GraphBLASType>(
 
     // Build IR graph
     let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
 
     let u_shape = Shape::vector(u.size());
     let v_shape = Shape::vector(v.size());
@@ -386,9 +380,7 @@ pub fn ewmult_vector<T: GraphBLASType>(
         v.indices().as_ptr() as *const (),
         v.values().as_ptr() as *const (),
     ];
-    let outputs: Vec<*mut ()> = vec![
-        w as *mut Vector<T> as *mut (),
-    ];
+    let outputs: Vec<*mut ()> = vec![w as *mut Vector<T> as *mut ()];
 
     // TODO: Real execution would compute w = u .* v element-wise
     function.execute(&inputs, &outputs)?;

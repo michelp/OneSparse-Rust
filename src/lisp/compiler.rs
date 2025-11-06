@@ -3,9 +3,7 @@
 // Translates Lisp AST nodes to IR graph nodes
 
 use crate::core::error::{GraphBlasError, Result};
-use crate::ir::{
-    BinaryOpKind, GraphBuilder, NodeId, ScalarType, ScalarValue, UnaryOpKind,
-};
+use crate::ir::{BinaryOpKind, GraphBuilder, NodeId, ScalarType, ScalarValue, UnaryOpKind};
 use crate::lisp::ast::*;
 use crate::lisp::types::{Type, TypeEnv};
 use std::collections::HashMap;
@@ -39,8 +37,7 @@ impl Compiler {
 
             Expr::Variable(name) => {
                 log::trace!("Resolving variable: {}", name);
-                self
-                    .bindings
+                self.bindings
                     .get(name)
                     .copied()
                     .ok_or(GraphBlasError::InvalidValue)
@@ -68,6 +65,18 @@ impl Compiler {
                 // Compile body
                 self.compile_expr(body)
             }
+
+            // Control structures not yet supported in IR compilation (Phase 2)
+            Expr::If { .. }
+            | Expr::While { .. }
+            | Expr::For { .. }
+            | Expr::Cond { .. }
+            | Expr::Block(_)
+            | Expr::Break(_)
+            | Expr::Continue => {
+                log::debug!("Control flow not yet supported in JIT compilation");
+                Err(GraphBlasError::NotImplemented)
+            }
         };
 
         if let Ok(node_id) = result {
@@ -85,8 +94,7 @@ impl Compiler {
 
         // Create an input node for the literal
         // TODO: Support actual constant values in IR
-        self.builder
-            .input_scalar("const", scalar_type)
+        self.builder.input_scalar("const", scalar_type)
     }
 
     /// Compile a function call
@@ -309,11 +317,7 @@ impl Compiler {
             .ok_or(GraphBlasError::InvalidValue)?;
 
         // Extract scalar type from IRType
-        match node.output_type {
-            crate::ir::IRType::Scalar(st) |
-            crate::ir::IRType::Vector(st) |
-            crate::ir::IRType::Matrix(st) => Ok(st),
-        }
+        Ok(node.output_type.scalar_type())
     }
 
     /// Helper: extract a scalar value from an expression
@@ -362,16 +366,12 @@ impl Compiler {
                 // TODO: Add Equal variant to SelectOp or use range
                 crate::ir::SelectOp::NonZero
             }
-            Predicate::NotEqual(_v) => {
-                crate::ir::SelectOp::NonZero
-            }
+            Predicate::NotEqual(_v) => crate::ir::SelectOp::NonZero,
             Predicate::GreaterOrEqual(v) => {
                 // Use GreaterThan for now
                 crate::ir::SelectOp::GreaterThan(ScalarValue::Float64(v))
             }
-            Predicate::LessOrEqual(v) => {
-                crate::ir::SelectOp::LessThan(ScalarValue::Float64(v))
-            }
+            Predicate::LessOrEqual(v) => crate::ir::SelectOp::LessThan(ScalarValue::Float64(v)),
         }
     }
 
@@ -416,7 +416,11 @@ mod tests {
 
         let graph = compiler.into_graph();
         let node = graph.get_node(node_id).unwrap();
-        assert!(matches!(node.output_type, crate::ir::IRType::Scalar(crate::ir::ScalarType::Float64)));
+        assert!(node.output_type.is_scalar());
+        assert_eq!(
+            node.output_type.scalar_type(),
+            crate::ir::ScalarType::Float64
+        );
     }
 
     #[test]
@@ -440,10 +444,7 @@ mod tests {
         let graph = compiler.into_graph();
 
         let node = graph.get_node(result).unwrap();
-        assert!(matches!(
-            node.op,
-            crate::ir::Operation::Transpose
-        ));
+        assert!(matches!(node.op, crate::ir::Operation::Transpose));
     }
 
     #[test]
@@ -476,9 +477,6 @@ mod tests {
         let graph = compiler.into_graph();
 
         let node = graph.get_node(result).unwrap();
-        assert!(matches!(
-            node.op,
-            crate::ir::Operation::MatMul { .. }
-        ));
+        assert!(matches!(node.op, crate::ir::Operation::MatMul { .. }));
     }
 }

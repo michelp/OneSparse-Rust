@@ -65,8 +65,8 @@ pub fn apply_matrix<T: GraphBLASType>(
 
     // Build IR graph
     let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
 
     let a_shape = Shape::matrix(a.nrows(), a.ncols());
     let a_node = builder.input_matrix("A", scalar_type, a_shape)?;
@@ -102,12 +102,8 @@ pub fn apply_matrix<T: GraphBLASType>(
     let a_storage = a.storage();
     let c_storage = c.storage_mut();
 
-    let inputs: Vec<*const ()> = vec![
-        a_storage as *const _ as *const (),
-    ];
-    let outputs: Vec<*mut ()> = vec![
-        c_storage as *mut _ as *mut (),
-    ];
+    let inputs: Vec<*const ()> = vec![a_storage as *const _ as *const ()];
+    let outputs: Vec<*mut ()> = vec![c_storage as *mut _ as *mut ()];
 
     // TODO: Real execution would compute C = op(A)
     function.execute(&inputs, &outputs)?;
@@ -149,8 +145,8 @@ pub fn apply_vector<T: GraphBLASType>(
 
     // Build IR graph
     let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
 
     let u_shape = Shape::vector(u.size());
     let u_node = builder.input_vector("u", scalar_type, u_shape)?;
@@ -182,9 +178,7 @@ pub fn apply_vector<T: GraphBLASType>(
         u.indices().as_ptr() as *const (),
         u.values().as_ptr() as *const (),
     ];
-    let outputs: Vec<*mut ()> = vec![
-        w as *mut Vector<T> as *mut (),
-    ];
+    let outputs: Vec<*mut ()> = vec![w as *mut Vector<T> as *mut ()];
 
     // TODO: Real execution would compute w = op(u)
     function.execute(&inputs, &outputs)?;
@@ -228,8 +222,8 @@ pub fn apply_binary_left_matrix<T: GraphBLASType>(
 
     // Build IR graph
     let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
 
     let a_shape = Shape::matrix(a.nrows(), a.ncols());
     let a_node = builder.input_matrix("A", scalar_type, a_shape)?;
@@ -237,7 +231,9 @@ pub fn apply_binary_left_matrix<T: GraphBLASType>(
     // Convert scalar to ScalarValue
     // TODO: Support all scalar types, not just f64
     let scalar_value = match scalar_type {
-        ScalarType::Float64 => ScalarValue::Float64(unsafe { *(&scalar as *const T as *const f64) }),
+        ScalarType::Float64 => {
+            ScalarValue::Float64(unsafe { *(&scalar as *const T as *const f64) })
+        }
         _ => return Err(GraphBlasError::InvalidValue), // Only f64 supported for now
     };
 
@@ -271,9 +267,7 @@ pub fn apply_binary_left_matrix<T: GraphBLASType>(
         &scalar as *const T as *const (),
         a_storage as *const _ as *const (),
     ];
-    let outputs: Vec<*mut ()> = vec![
-        c_storage as *mut _ as *mut (),
-    ];
+    let outputs: Vec<*mut ()> = vec![c_storage as *mut _ as *mut ()];
 
     // TODO: Real execution would compute C = scalar op A
     function.execute(&inputs, &outputs)?;
@@ -317,8 +311,8 @@ pub fn apply_binary_right_matrix<T: GraphBLASType>(
 
     // Build IR graph
     let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
 
     let a_shape = Shape::matrix(a.nrows(), a.ncols());
     let a_node = builder.input_matrix("A", scalar_type, a_shape)?;
@@ -326,7 +320,9 @@ pub fn apply_binary_right_matrix<T: GraphBLASType>(
     // Convert scalar to ScalarValue
     // TODO: Support all scalar types, not just f64
     let scalar_value = match scalar_type {
-        ScalarType::Float64 => ScalarValue::Float64(unsafe { *(&scalar as *const T as *const f64) }),
+        ScalarType::Float64 => {
+            ScalarValue::Float64(unsafe { *(&scalar as *const T as *const f64) })
+        }
         _ => return Err(GraphBlasError::InvalidValue), // Only f64 supported for now
     };
 
@@ -360,9 +356,7 @@ pub fn apply_binary_right_matrix<T: GraphBLASType>(
         a_storage as *const _ as *const (),
         &scalar as *const T as *const (),
     ];
-    let outputs: Vec<*mut ()> = vec![
-        c_storage as *mut _ as *mut (),
-    ];
+    let outputs: Vec<*mut ()> = vec![c_storage as *mut _ as *mut ()];
 
     // TODO: Real execution would compute C = A op scalar
     function.execute(&inputs, &outputs)?;

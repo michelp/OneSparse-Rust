@@ -5,8 +5,8 @@
 use crate::core::error::{GraphBlasError, Result};
 use crate::ir::graph::IRGraph;
 use crate::ir::node::{
-    BinaryOpKind, MonoidOp, NodeId, Operation, ScalarValue, SelectOp, SemiringOp,
-    StorageFormat, UnaryOpKind,
+    BinaryOpKind, MonoidOp, NodeId, Operation, ScalarValue, SelectOp, SemiringOp, StorageFormat,
+    UnaryOpKind,
 };
 use crate::ir::shape::Shape;
 use crate::ir::types::{IRType, ScalarType};
@@ -47,7 +47,7 @@ impl GraphBuilder {
                 format: StorageFormat::Any,
             },
             vec![],
-            IRType::Matrix(elem_type),
+            IRType::Tensor(elem_type, shape.clone()),
             shape,
         )?;
 
@@ -75,7 +75,7 @@ impl GraphBuilder {
                 format: StorageFormat::Any,
             },
             vec![],
-            IRType::Vector(elem_type),
+            IRType::Tensor(elem_type, shape.clone()),
             shape,
         )?;
 
@@ -98,7 +98,7 @@ impl GraphBuilder {
                 format: StorageFormat::Any,
             },
             vec![],
-            IRType::Scalar(elem_type),
+            IRType::Tensor(elem_type, Shape::Scalar),
             Shape::Scalar,
         )?;
 
@@ -108,26 +108,16 @@ impl GraphBuilder {
     }
 
     /// Matrix-matrix multiplication
-    pub fn matmul(
-        &mut self,
-        a: NodeId,
-        b: NodeId,
-        semiring: SemiringOp,
-    ) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
-        let b_node = self.graph.get_node(b)
-            .ok_or(GraphBlasError::InvalidValue)?;
+    pub fn matmul(&mut self, a: NodeId, b: NodeId, semiring: SemiringOp) -> Result<NodeId> {
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
+        let b_node = self.graph.get_node(b).ok_or(GraphBlasError::InvalidValue)?;
 
         // Infer output shape
         let output_shape = Shape::matmul(&a_node.output_shape, &b_node.output_shape)
             .ok_or(GraphBlasError::DimensionMismatch)?;
 
         // Get element type (should match semiring)
-        let elem_type = match a_node.output_type {
-            IRType::Matrix(t) => t,
-            _ => return Err(GraphBlasError::InvalidValue),
-        };
+        let elem_type = a_node.output_type.scalar_type();
 
         self.graph.add_node(
             Operation::MatMul {
@@ -135,83 +125,56 @@ impl GraphBuilder {
                 format: StorageFormat::Any,
             },
             vec![a, b],
-            IRType::Matrix(elem_type),
+            IRType::Tensor(elem_type, output_shape.clone()),
             output_shape,
         )
     }
 
     /// Matrix-vector multiplication
-    pub fn matvec(
-        &mut self,
-        a: NodeId,
-        u: NodeId,
-        semiring: SemiringOp,
-    ) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
-        let u_node = self.graph.get_node(u)
-            .ok_or(GraphBlasError::InvalidValue)?;
+    pub fn matvec(&mut self, a: NodeId, u: NodeId, semiring: SemiringOp) -> Result<NodeId> {
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
+        let u_node = self.graph.get_node(u).ok_or(GraphBlasError::InvalidValue)?;
 
         let output_shape = Shape::matmul(&a_node.output_shape, &u_node.output_shape)
             .ok_or(GraphBlasError::DimensionMismatch)?;
 
-        let elem_type = match a_node.output_type {
-            IRType::Matrix(t) => t,
-            _ => return Err(GraphBlasError::InvalidValue),
-        };
+        let elem_type = a_node.output_type.scalar_type();
 
         self.graph.add_node(
             Operation::MatVec { semiring },
             vec![a, u],
-            IRType::Vector(elem_type),
+            IRType::Tensor(elem_type, output_shape.clone()),
             output_shape,
         )
     }
 
     /// Vector-matrix multiplication
-    pub fn vecmat(
-        &mut self,
-        u: NodeId,
-        a: NodeId,
-        semiring: SemiringOp,
-    ) -> Result<NodeId> {
-        let u_node = self.graph.get_node(u)
-            .ok_or(GraphBlasError::InvalidValue)?;
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
+    pub fn vecmat(&mut self, u: NodeId, a: NodeId, semiring: SemiringOp) -> Result<NodeId> {
+        let u_node = self.graph.get_node(u).ok_or(GraphBlasError::InvalidValue)?;
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
 
         let output_shape = Shape::matmul(&u_node.output_shape, &a_node.output_shape)
             .ok_or(GraphBlasError::DimensionMismatch)?;
 
-        let elem_type = match a_node.output_type {
-            IRType::Matrix(t) => t,
-            _ => return Err(GraphBlasError::InvalidValue),
-        };
+        let elem_type = a_node.output_type.scalar_type();
 
         self.graph.add_node(
             Operation::VecMat { semiring },
             vec![u, a],
-            IRType::Vector(elem_type),
+            IRType::Tensor(elem_type, output_shape.clone()),
             output_shape,
         )
     }
 
     /// Element-wise addition (union)
-    pub fn ewise_add(
-        &mut self,
-        a: NodeId,
-        b: NodeId,
-        binary_op: BinaryOpKind,
-    ) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
-        let b_node = self.graph.get_node(b)
-            .ok_or(GraphBlasError::InvalidValue)?;
+    pub fn ewise_add(&mut self, a: NodeId, b: NodeId, binary_op: BinaryOpKind) -> Result<NodeId> {
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
+        let b_node = self.graph.get_node(b).ok_or(GraphBlasError::InvalidValue)?;
 
         let output_shape = Shape::ewise(&a_node.output_shape, &b_node.output_shape)
             .ok_or(GraphBlasError::DimensionMismatch)?;
 
-        let output_type = a_node.output_type;
+        let output_type = a_node.output_type.clone();
 
         self.graph.add_node(
             Operation::EWiseAdd { binary_op },
@@ -222,21 +185,14 @@ impl GraphBuilder {
     }
 
     /// Element-wise multiplication (intersection)
-    pub fn ewise_mult(
-        &mut self,
-        a: NodeId,
-        b: NodeId,
-        binary_op: BinaryOpKind,
-    ) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
-        let b_node = self.graph.get_node(b)
-            .ok_or(GraphBlasError::InvalidValue)?;
+    pub fn ewise_mult(&mut self, a: NodeId, b: NodeId, binary_op: BinaryOpKind) -> Result<NodeId> {
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
+        let b_node = self.graph.get_node(b).ok_or(GraphBlasError::InvalidValue)?;
 
         let output_shape = Shape::ewise(&a_node.output_shape, &b_node.output_shape)
             .ok_or(GraphBlasError::DimensionMismatch)?;
 
-        let output_type = a_node.output_type;
+        let output_type = a_node.output_type.clone();
 
         self.graph.add_node(
             Operation::EWiseMult { binary_op },
@@ -247,18 +203,13 @@ impl GraphBuilder {
     }
 
     /// Apply unary operator
-    pub fn apply(
-        &mut self,
-        a: NodeId,
-        unary_op: UnaryOpKind,
-    ) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
+    pub fn apply(&mut self, a: NodeId, unary_op: UnaryOpKind) -> Result<NodeId> {
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
 
         self.graph.add_node(
             Operation::Apply { unary_op },
             vec![a],
-            a_node.output_type,
+            a_node.output_type.clone(),
             a_node.output_shape.clone(),
         )
     }
@@ -270,13 +221,12 @@ impl GraphBuilder {
         a: NodeId,
         binary_op: BinaryOpKind,
     ) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
 
         self.graph.add_node(
             Operation::ApplyBinaryLeft { binary_op, scalar },
             vec![a],
-            a_node.output_type,
+            a_node.output_type.clone(),
             a_node.output_shape.clone(),
         )
     }
@@ -288,59 +238,56 @@ impl GraphBuilder {
         scalar: ScalarValue,
         binary_op: BinaryOpKind,
     ) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
 
         self.graph.add_node(
             Operation::ApplyBinaryRight { binary_op, scalar },
             vec![a],
-            a_node.output_type,
+            a_node.output_type.clone(),
             a_node.output_shape.clone(),
         )
     }
 
     /// Select elements based on predicate
-    pub fn select(
-        &mut self,
-        a: NodeId,
-        predicate: SelectOp,
-    ) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
+    pub fn select(&mut self, a: NodeId, predicate: SelectOp) -> Result<NodeId> {
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
 
         self.graph.add_node(
             Operation::Select { predicate },
             vec![a],
-            a_node.output_type,
+            a_node.output_type.clone(),
             a_node.output_shape.clone(),
         )
     }
 
     /// Transpose matrix
     pub fn transpose(&mut self, a: NodeId) -> Result<NodeId> {
-        let a_node = self.graph.get_node(a)
-            .ok_or(GraphBlasError::InvalidValue)?;
+        let a_node = self.graph.get_node(a).ok_or(GraphBlasError::InvalidValue)?;
 
-        let output_shape = a_node.output_shape.transpose()
+        let output_shape = a_node
+            .output_shape
+            .transpose()
             .ok_or(GraphBlasError::InvalidValue)?;
 
         self.graph.add_node(
             Operation::Transpose,
             vec![a],
-            a_node.output_type,
+            a_node.output_type.clone(),
             output_shape,
         )
     }
 
     /// Mark a node as an output
     pub fn output(&mut self, node: NodeId) -> Result<NodeId> {
-        let node_data = self.graph.get_node(node)
+        let node_data = self
+            .graph
+            .get_node(node)
             .ok_or(GraphBlasError::InvalidValue)?;
 
         let output_id = self.graph.add_node(
             Operation::Output,
             vec![node],
-            node_data.output_type,
+            node_data.output_type.clone(),
             node_data.output_shape.clone(),
         )?;
 
@@ -529,11 +476,9 @@ mod tests {
             .unwrap();
 
         let b = builder.apply(a, UnaryOpKind::Abs).unwrap();
-        let _c = builder.apply_binary_right(
-            b,
-            ScalarValue::Float64(2.0),
-            BinaryOpKind::Mul,
-        ).unwrap();
+        let _c = builder
+            .apply_binary_right(b, ScalarValue::Float64(2.0), BinaryOpKind::Mul)
+            .unwrap();
 
         assert_eq!(builder.graph().nodes().len(), 3);
     }

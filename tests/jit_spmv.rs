@@ -46,9 +46,21 @@ fn test_jit_spmv_simple() {
 
     let result = w.values();
     assert_eq!(result.len(), 3);
-    assert!((result[0] - 7.0).abs() < 1e-10, "Expected 7.0, got {}", result[0]);
-    assert!((result[1] - 6.0).abs() < 1e-10, "Expected 6.0, got {}", result[1]);
-    assert!((result[2] - 19.0).abs() < 1e-10, "Expected 19.0, got {}", result[2]);
+    assert!(
+        (result[0] - 7.0).abs() < 1e-10,
+        "Expected 7.0, got {}",
+        result[0]
+    );
+    assert!(
+        (result[1] - 6.0).abs() < 1e-10,
+        "Expected 6.0, got {}",
+        result[1]
+    );
+    assert!(
+        (result[2] - 19.0).abs() < 1e-10,
+        "Expected 19.0, got {}",
+        result[2]
+    );
 }
 
 #[test]
@@ -216,9 +228,21 @@ fn test_jit_spmv_max_times() {
     // row 2: max(0.7*1.0, 0.6*0.8) = max(0.7, 0.48) = 0.7
 
     let result = w.values();
-    assert!((result[0] - 0.9).abs() < 1e-10, "Expected 0.9, got {}", result[0]);
-    assert!((result[1] - 0.72).abs() < 1e-10, "Expected 0.72, got {}", result[1]);
-    assert!((result[2] - 0.7).abs() < 1e-10, "Expected 0.7, got {}", result[2]);
+    assert!(
+        (result[0] - 0.9).abs() < 1e-10,
+        "Expected 0.9, got {}",
+        result[0]
+    );
+    assert!(
+        (result[1] - 0.72).abs() < 1e-10,
+        "Expected 0.72, got {}",
+        result[1]
+    );
+    assert!(
+        (result[2] - 0.7).abs() < 1e-10,
+        "Expected 0.7, got {}",
+        result[2]
+    );
 }
 
 #[test]

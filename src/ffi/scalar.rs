@@ -15,10 +15,7 @@ pub type GrB_Scalar = *mut GrB_Scalar_opaque;
 
 /// Create a new scalar
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Scalar_new(
-    scalar_out: *mut GrB_Scalar,
-    _type_: GrB_Type,
-) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Scalar_new(scalar_out: *mut GrB_Scalar, _type_: GrB_Type) -> GrB_Info {
     let result = catch_unwind(|| {
         if scalar_out.is_null() {
             return GrB_NULL_POINTER;

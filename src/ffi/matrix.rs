@@ -56,10 +56,7 @@ pub unsafe extern "C" fn GrB_Matrix_free(matrix: *mut GrB_Matrix) -> GrB_Info {
 
 /// Get number of rows
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Matrix_nrows(
-    nrows: *mut GrB_Index,
-    matrix: GrB_Matrix,
-) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Matrix_nrows(nrows: *mut GrB_Index, matrix: GrB_Matrix) -> GrB_Info {
     let result = catch_unwind(|| {
         if nrows.is_null() || matrix.is_null() {
             return GrB_NULL_POINTER;
@@ -74,10 +71,7 @@ pub unsafe extern "C" fn GrB_Matrix_nrows(
 
 /// Get number of columns
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Matrix_ncols(
-    ncols: *mut GrB_Index,
-    matrix: GrB_Matrix,
-) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Matrix_ncols(ncols: *mut GrB_Index, matrix: GrB_Matrix) -> GrB_Info {
     let result = catch_unwind(|| {
         if ncols.is_null() || matrix.is_null() {
             return GrB_NULL_POINTER;
@@ -92,10 +86,7 @@ pub unsafe extern "C" fn GrB_Matrix_ncols(
 
 /// Get number of stored values
 #[no_mangle]
-pub unsafe extern "C" fn GrB_Matrix_nvals(
-    nvals: *mut GrB_Index,
-    matrix: GrB_Matrix,
-) -> GrB_Info {
+pub unsafe extern "C" fn GrB_Matrix_nvals(nvals: *mut GrB_Index, matrix: GrB_Matrix) -> GrB_Info {
     let result = catch_unwind(|| {
         if nvals.is_null() || matrix.is_null() {
             return GrB_NULL_POINTER;

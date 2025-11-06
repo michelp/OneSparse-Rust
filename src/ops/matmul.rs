@@ -11,12 +11,12 @@
 use crate::compiler::backend::Backend;
 use crate::compiler::cache::{CacheKey, KernelCache};
 use crate::compiler::cranelift_backend::CraneliftBackend;
+use crate::core::container::SparseContainer;
 use crate::core::error::{GraphBlasError, Result};
 use crate::core::matrix::Matrix;
 use crate::core::semiring::Semiring;
 use crate::core::vector::Vector;
 use crate::ir::builder::GraphBuilder;
-use crate::ir::node::{BinaryOpKind, MonoidOp, ScalarValue, SemiringOp};
 use crate::ir::types::ScalarType;
 use crate::ir::Shape;
 use crate::ops::descriptor::Descriptor;
@@ -30,6 +30,203 @@ use std::sync::Arc;
 lazy_static::lazy_static! {
     /// Global kernel cache (100 MB default)
     static ref KERNEL_CACHE: KernelCache = KernelCache::new(100);
+}
+
+/// Unified internal matmul compilation and execution
+///
+/// Following SuiteSparse design: vectors are n×1 matrices internally,
+/// so all operations (mxm, mxv, vxm) use the same compilation path.
+/// Shape metadata distinguishes the operation types.
+///
+/// This eliminates ~95% code duplication between mxm/mxv/vxm.
+fn compile_and_execute_matmul<T: GraphBLASType>(
+    output: &mut SparseContainer<T>,
+    left: &SparseContainer<T>,
+    right: &SparseContainer<T>,
+    semiring: &Semiring<T>,
+    desc: Option<&Descriptor>,
+) -> Result<()> {
+    // Build IR graph
+    log::info!("Building IR graph for matrix multiplication");
+    let mut builder = GraphBuilder::new();
+
+    // Get scalar type
+    let scalar_type =
+        ScalarType::from_type_code(T::TYPE_CODE).ok_or(GraphBlasError::InvalidValue)?;
+    log::debug!("Scalar type: {:?}", scalar_type);
+
+    // Add inputs - use appropriate shape types
+    // Vectors are n×1 internally, but we mark them as vectors in the IR
+    let left_node = if left.is_vector() {
+        let left_shape = Shape::vector(left.nrows());
+        log::debug!("Left is vector, shape: {:?}", left_shape);
+        builder.input_vector("u", scalar_type, left_shape)?
+    } else {
+        let left_shape = Shape::matrix(left.nrows(), left.ncols());
+        log::debug!("Left is matrix, shape: {:?}", left_shape);
+        builder.input_matrix("A", scalar_type, left_shape)?
+    };
+
+    let right_node = if right.is_vector() {
+        let right_shape = Shape::vector(right.nrows());
+        log::debug!("Right is vector, shape: {:?}", right_shape);
+        builder.input_vector("v", scalar_type, right_shape)?
+    } else {
+        let right_shape = Shape::matrix(right.nrows(), right.ncols());
+        log::debug!("Right is matrix, shape: {:?}", right_shape);
+        builder.input_matrix("B", scalar_type, right_shape)?
+    };
+
+    log::trace!(
+        "Created input nodes: left={}, right={}",
+        left_node,
+        right_node
+    );
+
+    // Apply transpose if requested
+    let (left_node, right_node) = if let Some(descriptor) = desc {
+        let left_final = if descriptor.transpose_first {
+            builder.transpose(left_node)?
+        } else {
+            left_node
+        };
+
+        let right_final = if descriptor.transpose_second {
+            builder.transpose(right_node)?
+        } else {
+            right_node
+        };
+
+        (left_final, right_final)
+    } else {
+        (left_node, right_node)
+    };
+
+    // Convert semiring from core layer to IR layer
+    let semiring_op = match semiring.name().as_ref() {
+        "plus_times" => crate::ir::semirings::plus_times(scalar_type),
+        "min_plus" => crate::ir::semirings::min_plus(scalar_type),
+        "max_times" => crate::ir::semirings::max_times(scalar_type),
+        "or_and" => crate::ir::semirings::or_and(),
+        _ => {
+            // Fallback to plus-times for unknown semirings
+            crate::ir::semirings::plus_times(scalar_type)
+        }
+    };
+
+    // Create appropriate operation based on shapes
+    // Use the correct IR operation for better optimization and execution
+    let result = if left.is_vector() && !right.is_vector() {
+        // Vector × Matrix (after transpose, it becomes 1×m × m×n = 1×n)
+        log::debug!(
+            "Creating vecmat operation with semiring: add={:?}, mul={:?}",
+            semiring_op.add_op.binary_op,
+            semiring_op.mul_op
+        );
+        builder.vecmat(left_node, right_node, semiring_op)?
+    } else if !left.is_vector() && right.is_vector() {
+        // Matrix × Vector (m×n × n×1 = m×1)
+        log::debug!(
+            "Creating matvec operation with semiring: add={:?}, mul={:?}",
+            semiring_op.add_op.binary_op,
+            semiring_op.mul_op
+        );
+        builder.matvec(left_node, right_node, semiring_op)?
+    } else {
+        // Matrix × Matrix (m×n × n×p = m×p)
+        log::debug!(
+            "Creating matmul operation with semiring: add={:?}, mul={:?}",
+            semiring_op.add_op.binary_op,
+            semiring_op.mul_op
+        );
+        builder.matmul(left_node, right_node, semiring_op)?
+    };
+    log::trace!("Operation result node: {}", result);
+
+    // Mark as output
+    builder.output(result)?;
+
+    // Build graph
+    log::debug!("Building IR graph");
+    let mut graph = builder.build();
+    log::trace!("Graph has {} nodes", graph.nodes().len());
+
+    // Try to get cached kernel
+    let cache_key = CacheKey::from_graph(&graph);
+    let function = if let Some(cached_fn) = KERNEL_CACHE.get(&cache_key) {
+        log::info!("Using cached kernel");
+        cached_fn
+    } else {
+        log::info!("Compiling new kernel");
+
+        // Apply optimization passes
+        log::info!("Running optimization passes");
+        let mut pass_manager = PassManager::new();
+        pass_manager.add_pass(Box::new(FusionPass::new()));
+        pass_manager.add_pass(Box::new(CSEPass::new()));
+        pass_manager.add_pass(Box::new(FormatSelectionPass::new()));
+
+        pass_manager.run_all(&mut graph)?;
+
+        // Compile the graph
+        log::info!("JIT compiling with Cranelift backend");
+        let backend = CraneliftBackend::new()?;
+        let compiled = backend.compile(&graph)?;
+
+        // Cache the result (estimate 10KB per kernel)
+        KERNEL_CACHE.insert(cache_key, compiled.clone(), 10240);
+
+        Arc::new(compiled)
+    };
+
+    // Execute the compiled kernel
+    // Handle vectors specially for backwards compatibility with execution layer
+    let inputs: Vec<*const ()> = if left.is_vector() && right.is_vector() {
+        // Both vectors (rare case, but handle it)
+        let left_data = left.vector_data().expect("Vector should have vector_data");
+        let right_data = right.vector_data().expect("Vector should have vector_data");
+        vec![
+            left_data.0.as_ptr() as *const (),
+            left_data.1.as_ptr() as *const (),
+            right_data.0.as_ptr() as *const (),
+            right_data.1.as_ptr() as *const (),
+        ]
+    } else if left.is_vector() {
+        // Left is vector (vxm case - but after transpose in descriptor)
+        let vec_data = left.vector_data().expect("Vector should have vector_data");
+        vec![
+            vec_data.0.as_ptr() as *const (),
+            vec_data.1.as_ptr() as *const (),
+            right.storage() as *const _ as *const (),
+        ]
+    } else if right.is_vector() {
+        // Right is vector (mxv case)
+        let vec_data = right.vector_data().expect("Vector should have vector_data");
+        vec![
+            left.storage() as *const _ as *const (),
+            vec_data.0.as_ptr() as *const (),
+            vec_data.1.as_ptr() as *const (),
+        ]
+    } else {
+        // Both matrices (mxm case)
+        vec![
+            left.storage() as *const _ as *const (),
+            right.storage() as *const _ as *const (),
+        ]
+    };
+
+    let output_storage = output.storage_mut();
+    let outputs: Vec<*mut ()> = vec![output_storage as *mut _ as *mut ()];
+    log::trace!(
+        "Prepared {} input(s) and {} output(s)",
+        inputs.len(),
+        outputs.len()
+    );
+
+    // Call the compiled kernel
+    function.execute(&inputs, &outputs)?;
+
+    Ok(())
 }
 
 /// Matrix-matrix multiplication: C = A * B
@@ -46,7 +243,7 @@ pub fn mxm<T: GraphBLASType>(
     mask: Option<&Matrix<bool>>,
     left_matrix: &Matrix<T>,
     right_matrix: &Matrix<T>,
-    _semiring: &Semiring<T>,
+    semiring: &Semiring<T>,
     desc: Option<&Descriptor>,
 ) -> Result<()> {
     // Get effective dimensions (considering transpose)
@@ -86,105 +283,14 @@ pub fn mxm<T: GraphBLASType>(
         }
     }
 
-    // Build IR graph
-    let mut builder = GraphBuilder::new();
-
-    // Get scalar type
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
-
-    // Add inputs
-    let left_shape = Shape::matrix(left_matrix.nrows(), left_matrix.ncols());
-    let right_shape = Shape::matrix(right_matrix.nrows(), right_matrix.ncols());
-
-    let left_node = builder.input_matrix("A", scalar_type, left_shape)?;
-    let right_node = builder.input_matrix("B", scalar_type, right_shape)?;
-
-    // Apply transpose if requested
-    let (left_node, right_node) = if let Some(descriptor) = desc {
-        let left_final = if descriptor.transpose_first {
-            builder.transpose(left_node)?
-        } else {
-            left_node
-        };
-
-        let right_final = if descriptor.transpose_second {
-            builder.transpose(right_node)?
-        } else {
-            right_node
-        };
-
-        (left_final, right_final)
-    } else {
-        (left_node, right_node)
-    };
-
-    // Convert semiring to SemiringOp
-    let semiring_op = SemiringOp {
-        add_op: MonoidOp {
-            binary_op: BinaryOpKind::Add, // TODO: Get from semiring
-            identity: ScalarValue::from_type(scalar_type, 0.0),
-        },
-        mul_op: BinaryOpKind::Mul, // TODO: Get from semiring
-    };
-
-    // Create matmul operation
-    let result = builder.matmul(left_node, right_node, semiring_op)?;
-
-    // Mark as output
-    builder.output(result)?;
-
-    // Build graph
-    let mut graph = builder.build();
-
-    // Try to get cached kernel
-    let cache_key = CacheKey::from_graph(&graph);
-    let function = if let Some(cached_fn) = KERNEL_CACHE.get(&cache_key) {
-        cached_fn
-    } else {
-        // Apply optimization passes
-        let mut pass_manager = PassManager::new();
-        pass_manager.add_pass(Box::new(FusionPass::new()));
-        pass_manager.add_pass(Box::new(CSEPass::new()));
-        pass_manager.add_pass(Box::new(FormatSelectionPass::new()));
-
-        pass_manager.run_all(&mut graph)?;
-
-        // Compile the graph
-        let backend = CraneliftBackend::new()?;
-        let compiled = backend.compile(&graph)?;
-
-        // Cache the result (estimate 10KB per kernel)
-        KERNEL_CACHE.insert(cache_key, compiled.clone(), 10240);
-
-        Arc::new(compiled)
-    };
-
-    // Execute the compiled kernel
-    // Extract sparse data from input matrices
-    let left_storage = left_matrix.storage();
-    let right_storage = right_matrix.storage();
-    let output_storage = output.storage_mut();
-
-    // Prepare input/output pointers for kernel execution
-    // In a full implementation, these would point to the actual sparse arrays
-    let inputs: Vec<*const ()> = vec![
-        left_storage as *const _ as *const (),
-        right_storage as *const _ as *const (),
-    ];
-    let outputs: Vec<*mut ()> = vec![
-        output_storage as *mut _ as *mut (),
-    ];
-
-    // Call the compiled kernel
-    // TODO: Real execution would:
-    // 1. Convert storage format if needed (CSR/CSC/COO)
-    // 2. Pass semiring operations to kernel
-    // 3. Apply mask and descriptor settings
-    // 4. Actually compute C = A * B using compiled native code
-    function.execute(&inputs, &outputs)?;
-
-    Ok(())
+    // Delegate to unified implementation
+    compile_and_execute_matmul(
+        output.inner_mut(),
+        left_matrix.inner(),
+        right_matrix.inner(),
+        semiring,
+        desc,
+    )
 }
 
 /// Matrix-vector multiplication: w = A * u
@@ -220,82 +326,15 @@ pub fn mxv<T: GraphBLASType>(
         }
     }
 
-    // Build IR graph
-    let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
-
-    let matrix_shape = Shape::matrix(matrix.nrows(), matrix.ncols());
-    let vector_shape = Shape::vector(input_vector.size());
-
-    let matrix_node = builder.input_matrix("A", scalar_type, matrix_shape)?;
-    let vector_node = builder.input_vector("u", scalar_type, vector_shape)?;
-
-    // Apply transpose if requested
-    let matrix_node = if let Some(descriptor) = desc {
-        if descriptor.transpose_first {
-            builder.transpose(matrix_node)?
-        } else {
-            matrix_node
-        }
-    } else {
-        matrix_node
-    };
-
-    // Convert semiring from core layer to IR layer
-    // Use the semiring name to dispatch to the correct IR semiring
-    let semiring_op = match semiring.name().as_ref() {
-        "plus_times" => crate::ir::semirings::plus_times(scalar_type),
-        "min_plus" => crate::ir::semirings::min_plus(scalar_type),
-        "max_times" => crate::ir::semirings::max_times(scalar_type),
-        "or_and" => crate::ir::semirings::or_and(),
-        _ => {
-            // Fallback to plus-times for unknown semirings
-            crate::ir::semirings::plus_times(scalar_type)
-        }
-    };
-
-    let result = builder.matvec(matrix_node, vector_node, semiring_op)?;
-    builder.output(result)?;
-
-    let mut graph = builder.build();
-
-    // Optimize and compile (similar to mxm)
-    let cache_key = CacheKey::from_graph(&graph);
-    let function = if let Some(cached_fn) = KERNEL_CACHE.get(&cache_key) {
-        cached_fn
-    } else {
-        let mut pass_manager = PassManager::new();
-        pass_manager.add_pass(Box::new(FusionPass::new()));
-        pass_manager.add_pass(Box::new(CSEPass::new()));
-        pass_manager.add_pass(Box::new(FormatSelectionPass::new()));
-        pass_manager.run_all(&mut graph)?;
-
-        let backend = CraneliftBackend::new()?;
-        let compiled = backend.compile(&graph)?;
-        KERNEL_CACHE.insert(cache_key, compiled.clone(), 10240);
-        Arc::new(compiled)
-    };
-
-    // Execute the compiled kernel
-    // Extract sparse data from inputs
-    let matrix_storage = matrix.storage();
-
-    // Prepare input/output pointers for kernel execution
-    let inputs: Vec<*const ()> = vec![
-        matrix_storage as *const _ as *const (),
-        input_vector.indices().as_ptr() as *const (),
-        input_vector.values().as_ptr() as *const (),
-    ];
-    let outputs: Vec<*mut ()> = vec![
-        output as *mut Vector<T> as *mut (),  // Pass the whole vector for now
-    ];
-
-    // Call the compiled kernel
-    // TODO: Real execution would compute output = matrix * input_vector using compiled native code
-    function.execute(&inputs, &outputs)?;
-
-    Ok(())
+    // Delegate to unified implementation
+    // Vector is internally n×1, so this becomes matrix × n×1 = m×1
+    compile_and_execute_matmul(
+        output.inner_mut(),
+        matrix.inner(),
+        input_vector.inner(),
+        semiring,
+        desc,
+    )
 }
 
 /// Vector-matrix multiplication: output = input_vector * matrix
@@ -331,82 +370,16 @@ pub fn vxm<T: GraphBLASType>(
         }
     }
 
-    // Build IR graph
-    let mut builder = GraphBuilder::new();
-    let scalar_type = ScalarType::from_type_code(T::TYPE_CODE)
-        .ok_or(GraphBlasError::InvalidValue)?;
-
-    let vector_shape = Shape::vector(input_vector.size());
-    let matrix_shape = Shape::matrix(matrix.nrows(), matrix.ncols());
-
-    let vector_node = builder.input_vector("u", scalar_type, vector_shape)?;
-    let matrix_node = builder.input_matrix("A", scalar_type, matrix_shape)?;
-
-    // Apply transpose if requested
-    let matrix_node = if let Some(descriptor) = desc {
-        if descriptor.transpose_second {
-            builder.transpose(matrix_node)?
-        } else {
-            matrix_node
-        }
-    } else {
-        matrix_node
-    };
-
-    // Convert semiring from core layer to IR layer
-    // Use the semiring name to dispatch to the correct IR semiring
-    let semiring_op = match semiring.name().as_ref() {
-        "plus_times" => crate::ir::semirings::plus_times(scalar_type),
-        "min_plus" => crate::ir::semirings::min_plus(scalar_type),
-        "max_times" => crate::ir::semirings::max_times(scalar_type),
-        "or_and" => crate::ir::semirings::or_and(),
-        _ => {
-            // Fallback to plus-times for unknown semirings
-            crate::ir::semirings::plus_times(scalar_type)
-        }
-    };
-
-    let result = builder.vecmat(vector_node, matrix_node, semiring_op)?;
-    builder.output(result)?;
-
-    let mut graph = builder.build();
-
-    // Optimize and compile
-    let cache_key = CacheKey::from_graph(&graph);
-    let function = if let Some(cached_fn) = KERNEL_CACHE.get(&cache_key) {
-        cached_fn
-    } else {
-        let mut pass_manager = PassManager::new();
-        pass_manager.add_pass(Box::new(FusionPass::new()));
-        pass_manager.add_pass(Box::new(CSEPass::new()));
-        pass_manager.add_pass(Box::new(FormatSelectionPass::new()));
-        pass_manager.run_all(&mut graph)?;
-
-        let backend = CraneliftBackend::new()?;
-        let compiled = backend.compile(&graph)?;
-        KERNEL_CACHE.insert(cache_key, compiled.clone(), 10240);
-        Arc::new(compiled)
-    };
-
-    // Execute the compiled kernel
-    // Extract sparse data from inputs
-    let matrix_storage = matrix.storage();
-
-    // Prepare input/output pointers for kernel execution
-    let inputs: Vec<*const ()> = vec![
-        input_vector.indices().as_ptr() as *const (),
-        input_vector.values().as_ptr() as *const (),
-        matrix_storage as *const _ as *const (),
-    ];
-    let outputs: Vec<*mut ()> = vec![
-        output as *mut Vector<T> as *mut (),  // Pass the whole vector for now
-    ];
-
-    // Call the compiled kernel
-    // TODO: Real execution would compute output = input_vector * matrix using compiled native code
-    function.execute(&inputs, &outputs)?;
-
-    Ok(())
+    // Delegate to unified implementation
+    // Vector is internally m×1, but builder.vecmat() treats it as a row vector (1×m) semantically
+    // No need to force transpose - the IR layer handles this correctly
+    compile_and_execute_matmul(
+        output.inner_mut(),
+        input_vector.inner(),
+        matrix.inner(),
+        semiring,
+        desc,
+    )
 }
 
 #[cfg(test)]
@@ -472,6 +445,9 @@ mod tests {
         let semiring = Semiring::plus_times().unwrap();
 
         let result = vxm(&mut w, None, &u, &a, &semiring, None);
+        if let Err(e) = &result {
+            eprintln!("vxm error: {:?}", e);
+        }
         assert!(result.is_ok());
     }
 

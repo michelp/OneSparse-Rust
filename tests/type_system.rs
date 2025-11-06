@@ -74,7 +74,7 @@ fn test_user_defined_type() {
 
     // User-defined types should have UserDefined variant
     match desc.code {
-        TypeCode::UserDefined(_) => {}, // Expected
+        TypeCode::UserDefined(_) => {} // Expected
         _ => panic!("Expected UserDefined type code"),
     }
 }
@@ -82,10 +82,14 @@ fn test_user_defined_type() {
 #[test]
 fn test_multiple_user_defined_types() {
     #[derive(Copy, Clone)]
-    struct Type1 { _x: i32 }
+    struct Type1 {
+        _x: i32,
+    }
 
     #[derive(Copy, Clone)]
-    struct Type2 { _y: f64 }
+    struct Type2 {
+        _y: f64,
+    }
 
     let desc1 = TypeDescriptor::new_user_defined::<Type1>("Type1".to_string());
     let desc2 = TypeDescriptor::new_user_defined::<Type2>("Type2".to_string());
@@ -95,7 +99,7 @@ fn test_multiple_user_defined_types() {
 
     // But both should be UserDefined
     match (desc1.code, desc2.code) {
-        (TypeCode::UserDefined(_), TypeCode::UserDefined(_)) => {}, // Expected
+        (TypeCode::UserDefined(_), TypeCode::UserDefined(_)) => {} // Expected
         _ => panic!("Expected UserDefined type codes"),
     }
 }

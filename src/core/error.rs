@@ -35,6 +35,10 @@ pub enum GraphBlasError {
     EmptyObject,
     /// Panic occurred
     Panic(String),
+    /// Loop break (control flow, not an error)
+    LoopBreak,
+    /// Loop continue (control flow, not an error)
+    LoopContinue,
 }
 
 impl GraphBlasError {
@@ -55,6 +59,9 @@ impl GraphBlasError {
             Self::IndexOutOfBounds => GrB_INDEX_OUT_OF_BOUNDS,
             Self::EmptyObject => GrB_EMPTY_OBJECT,
             Self::Panic(_) => GrB_PANIC,
+            // Control flow signals don't map to C API codes
+            Self::LoopBreak => GrB_PANIC,
+            Self::LoopContinue => GrB_PANIC,
         }
     }
 
@@ -98,6 +105,8 @@ impl fmt::Display for GraphBlasError {
             Self::IndexOutOfBounds => write!(f, "Index exceeds valid bounds"),
             Self::EmptyObject => write!(f, "Object is empty"),
             Self::Panic(msg) => write!(f, "Panic: {}", msg),
+            Self::LoopBreak => write!(f, "Break outside of loop"),
+            Self::LoopContinue => write!(f, "Continue outside of loop"),
         }
     }
 }

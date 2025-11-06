@@ -28,7 +28,9 @@ impl FusionPass {
 
     /// Create a fusion pass with custom max depth
     pub fn with_max_depth(max_depth: usize) -> Self {
-        Self { _max_depth: max_depth }
+        Self {
+            _max_depth: max_depth,
+        }
     }
 
     /// Check if two operations can be fused
@@ -113,11 +115,7 @@ impl FusionPass {
     }
 
     /// Create a fused operation from producer and consumer
-    fn create_fused_op(
-        &self,
-        producer: &Operation,
-        consumer: &Operation,
-    ) -> Option<Operation> {
+    fn create_fused_op(&self, producer: &Operation, consumer: &Operation) -> Option<Operation> {
         // TODO: Create actual fused operations
         // For now, we'll keep the consumer operation as-is
         // In a full implementation, we'd create FusedMatMulEWise, etc.
@@ -158,10 +156,9 @@ impl OptimizationPass for FusionPass {
         // and mark this as a TODO for actual implementation
 
         for (producer_id, consumer_id) in &pairs {
-            if let (Some(producer), Some(consumer)) = (
-                graph.get_node(*producer_id),
-                graph.get_node(*consumer_id),
-            ) {
+            if let (Some(producer), Some(consumer)) =
+                (graph.get_node(*producer_id), graph.get_node(*consumer_id))
+            {
                 if let Some(_fused_op) = self.create_fused_op(&producer.op, &consumer.op) {
                     // TODO: Create new fused node and update graph
                     // For now, just track that we found a fusion opportunity
@@ -188,7 +185,7 @@ impl Default for FusionPass {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{BinaryOpKind, GraphBuilder, ScalarType, Shape, semirings};
+    use crate::ir::{semirings, BinaryOpKind, GraphBuilder, ScalarType, Shape};
 
     #[test]
     fn test_fusion_pass_creation() {

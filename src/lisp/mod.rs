@@ -10,21 +10,21 @@
 //   (bfs my_matrix)
 
 pub mod ast;
+pub mod compiler;
+pub mod completer;
+pub mod eval;
+pub mod highlighter;
+pub mod kernel;
 pub mod parser;
 pub mod types;
-pub mod compiler;
-pub mod kernel;
-pub mod eval;
-pub mod completer;
 pub mod validator;
-pub mod highlighter;
 
 pub use ast::*;
+pub use compiler::*;
+pub use completer::*;
+pub use eval::*;
+pub use highlighter::*;
+pub use kernel::*;
 pub use parser::*;
 pub use types::*;
-pub use compiler::*;
-pub use kernel::*;
-pub use eval::*;
-pub use completer::*;
 pub use validator::*;
-pub use highlighter::*;

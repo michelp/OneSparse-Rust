@@ -93,9 +93,7 @@ impl KernelRegistry {
     pub fn compile(&self, name: &str, input_types: &[Type]) -> Result<Arc<CompiledFunction>> {
         let mut kernels = self.kernels.lock().unwrap();
 
-        let kernel = kernels
-            .get_mut(name)
-            .ok_or(GraphBlasError::InvalidValue)?;
+        let kernel = kernels.get_mut(name).ok_or(GraphBlasError::InvalidValue)?;
 
         // If already compiled, return cached version
         if let Some(ref func) = kernel.function {
@@ -130,10 +128,9 @@ impl KernelRegistry {
         // Bind input parameters to IR nodes
         for (param, ty) in definition.params.iter().zip(input_types.iter()) {
             let node_id = match ty {
-                Type::Scalar(scalar_type) => compiler.builder_mut().input_scalar(
-                    &param.name,
-                    *scalar_type,
-                )?,
+                Type::Scalar(scalar_type) => compiler
+                    .builder_mut()
+                    .input_scalar(&param.name, *scalar_type)?,
                 Type::Vector(scalar_type) => compiler.builder_mut().input_vector(
                     &param.name,
                     *scalar_type,

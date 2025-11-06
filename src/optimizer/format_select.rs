@@ -159,14 +159,21 @@ impl FormatSelectionPass {
 
     /// Count how many conversion nodes would be needed
     #[allow(dead_code)]
-    fn count_conversions(&self, graph: &IRGraph, formats: &HashMap<NodeId, StorageFormat>) -> usize {
+    fn count_conversions(
+        &self,
+        graph: &IRGraph,
+        formats: &HashMap<NodeId, StorageFormat>,
+    ) -> usize {
         let mut count = 0;
 
         for node in graph.nodes().values() {
             let node_format = formats.get(&node.id).copied().unwrap_or(StorageFormat::Any);
 
             for &input_id in &node.inputs {
-                let input_format = formats.get(&input_id).copied().unwrap_or(StorageFormat::Any);
+                let input_format = formats
+                    .get(&input_id)
+                    .copied()
+                    .unwrap_or(StorageFormat::Any);
 
                 if self.needs_conversion(node_format, input_format) {
                     count += 1;
@@ -184,7 +191,8 @@ impl OptimizationPass for FormatSelectionPass {
         let formats = self.assign_formats(graph)?;
 
         // Track conversions we've inserted: (from_node, from_format, to_format) -> conversion_node
-        let mut conversions: HashMap<(NodeId, StorageFormat, StorageFormat), NodeId> = HashMap::new();
+        let mut conversions: HashMap<(NodeId, StorageFormat, StorageFormat), NodeId> =
+            HashMap::new();
 
         let mut changed = false;
 
@@ -202,7 +210,10 @@ impl OptimizationPass for FormatSelectionPass {
             // Check each input
             let mut new_inputs = node.inputs.clone();
             for (idx, &input_id) in node.inputs.iter().enumerate() {
-                let input_format = formats.get(&input_id).copied().unwrap_or(StorageFormat::Any);
+                let input_format = formats
+                    .get(&input_id)
+                    .copied()
+                    .unwrap_or(StorageFormat::Any);
 
                 if self.needs_conversion(node_format, input_format) {
                     // Check if we already created this conversion
@@ -218,7 +229,7 @@ impl OptimizationPass for FormatSelectionPass {
                                 to: node_format,
                             },
                             vec![input_id],
-                            input_node.output_type,
+                            input_node.output_type.clone(),
                             input_node.output_shape.clone(),
                         )?;
                         conversions.insert(key, conv_id);
@@ -254,7 +265,7 @@ impl Default for FormatSelectionPass {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::{GraphBuilder, ScalarType, Shape, semirings};
+    use crate::ir::{semirings, GraphBuilder, ScalarType, Shape};
 
     #[test]
     fn test_format_selection_creation() {
@@ -340,7 +351,9 @@ mod tests {
             .input_matrix("B", ScalarType::Float64, Shape::matrix(10, 20))
             .unwrap();
 
-        builder.ewise_add(a, b, crate::ir::BinaryOpKind::Add).unwrap();
+        builder
+            .ewise_add(a, b, crate::ir::BinaryOpKind::Add)
+            .unwrap();
 
         let graph = builder.build();
 
@@ -349,7 +362,9 @@ mod tests {
 
         // Element-wise should preserve input formats
         // All should be CSR (default)
-        let all_csr = formats.values().all(|&f| f == StorageFormat::CSR || f == StorageFormat::Any);
+        let all_csr = formats
+            .values()
+            .all(|&f| f == StorageFormat::CSR || f == StorageFormat::Any);
         assert!(all_csr);
     }
 
@@ -377,14 +392,18 @@ mod tests {
 
         // Should have added conversion node(s)
         let final_node_count = graph.nodes().len();
-        assert!(final_node_count > initial_node_count,
-                "Expected conversion nodes to be inserted, initial: {}, final: {}",
-                initial_node_count, final_node_count);
+        assert!(
+            final_node_count > initial_node_count,
+            "Expected conversion nodes to be inserted, initial: {}, final: {}",
+            initial_node_count,
+            final_node_count
+        );
 
         // Check that a ConvertFormat node was created
-        let has_convert = graph.nodes().values().any(|node| {
-            matches!(node.op, Operation::ConvertFormat { .. })
-        });
+        let has_convert = graph
+            .nodes()
+            .values()
+            .any(|node| matches!(node.op, Operation::ConvertFormat { .. }));
         assert!(has_convert, "Expected at least one ConvertFormat node");
     }
 }

@@ -1,12 +1,12 @@
 // Optimizer Module: IR optimization passes
 
-pub mod pass;
 pub mod cse;
-pub mod fusion;
 pub mod format_select;
+pub mod fusion;
+pub mod pass;
 
 // Re-exports
-pub use pass::OptimizationPass;
 pub use cse::CSEPass;
-pub use fusion::FusionPass;
 pub use format_select::FormatSelectionPass;
+pub use fusion::FusionPass;
+pub use pass::OptimizationPass;

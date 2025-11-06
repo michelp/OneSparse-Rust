@@ -7,7 +7,8 @@ use crate::ir::IRGraph;
 
 /// Function pointer type for SpMV kernel
 /// Arguments: (row_ptrs, col_indices, values, x, y, nrows)
-type SpMVKernel = unsafe extern "C" fn(*const usize, *const usize, *const f64, *const f64, *mut f64, usize);
+type SpMVKernel =
+    unsafe extern "C" fn(*const usize, *const usize, *const f64, *const f64, *mut f64, usize);
 
 /// Thread-safe wrapper for function pointer
 /// SAFETY: JIT-compiled functions are stateless and safe to call from any thread
@@ -41,7 +42,7 @@ impl CompiledFunction {
     pub fn new_stub() -> Self {
         Self {
             kernel_ptr: None,
-            _graph: None
+            _graph: None,
         }
     }
 
@@ -49,7 +50,7 @@ impl CompiledFunction {
     pub(crate) fn new() -> Self {
         Self {
             kernel_ptr: None,
-            _graph: None
+            _graph: None,
         }
     }
 
@@ -97,7 +98,12 @@ impl CompiledFunction {
                 let output_vec = outputs[0] as *mut Vector<f64>;
 
                 // Extract CSR data from matrix
-                if let SparseStorage::CSR { row_ptrs, col_indices, values } = &*matrix_storage {
+                if let SparseStorage::CSR {
+                    row_ptrs,
+                    col_indices,
+                    values,
+                } = &*matrix_storage
+                {
                     // Extract output vector data
                     let y_data = (*output_vec).values_mut();
 
@@ -129,7 +135,7 @@ impl CompiledFunction {
     pub(crate) fn with_graph(graph: IRGraph) -> Self {
         Self {
             kernel_ptr: None,
-            _graph: Some(graph)
+            _graph: Some(graph),
         }
     }
 }
